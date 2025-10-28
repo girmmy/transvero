@@ -1,5 +1,7 @@
 # Transvero - Live Caption and Transcript Assistant
 
+[![Netlify Status](https://api.netlify.com/api/v1/badges/a4ff1a24-cdcd-4c0f-93bc-617ec4e838f2/deploy-status)](https://app.netlify.com/projects/transvero/deploys)
+
 A real-time speech recognition and transcription application built with React, TypeScript, Firebase, and Web Speech API.
 
 ## Features
