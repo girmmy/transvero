@@ -8,7 +8,6 @@ import {
 } from "react-icons/fi";
 import {
   BrowserInfo,
-  getBrowserRecommendations,
   getCompatibilityMessage,
 } from "../utils/browserDetection";
 
@@ -21,7 +20,6 @@ const BrowserCompatibility: React.FC<BrowserCompatibilityProps> = ({
   browserInfo,
   onDismiss,
 }) => {
-  const recommendations = getBrowserRecommendations(browserInfo);
   const compatibilityMessage = getCompatibilityMessage(browserInfo);
 
   const getStatusIcon = () => {

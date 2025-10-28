@@ -31,10 +31,6 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   onLanguageChange,
   disabled = false,
 }) => {
-  const selectedLanguageName =
-    languages.find((lang) => lang.code === selectedLanguage)?.name ||
-    "Select Language";
-
   return (
     <div className="relative">
       <label

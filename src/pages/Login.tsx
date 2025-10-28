@@ -141,12 +141,16 @@ const Login: React.FC = () => {
               </div>
 
               <div className="text-sm">
-                <a
-                  href="#"
+                <button
+                  type="button"
                   className="font-medium text-blue-600 hover:text-blue-500"
+                  onClick={() => {
+                    // TODO: Implement forgot password functionality
+                    console.log("Forgot password clicked");
+                  }}
                 >
                   Forgot your password?
-                </a>
+                </button>
               </div>
             </div>
 

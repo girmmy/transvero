@@ -1,5 +1,5 @@
 // Dashboard Page Component
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -21,21 +21,7 @@ const Dashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (user) {
-      loadTranscripts();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (searchTerm.trim()) {
-      handleSearch(searchTerm);
-    } else {
-      setFilteredTranscripts(transcripts);
-    }
-  }, [searchTerm, transcripts]);
-
-  const loadTranscripts = async () => {
+  const loadTranscripts = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -48,19 +34,36 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const handleSearch = async (term: string) => {
-    if (!user) return;
+  const handleSearch = useCallback(
+    async (term: string) => {
+      if (!user) return;
 
-    try {
-      const results = await searchTranscripts(user.uid, term);
-      setFilteredTranscripts(results);
-    } catch (error: any) {
-      console.error("Search error:", error);
+      try {
+        const results = await searchTranscripts(user.uid, term);
+        setFilteredTranscripts(results);
+      } catch (error: any) {
+        console.error("Search error:", error);
+        setFilteredTranscripts(transcripts);
+      }
+    },
+    [user, transcripts]
+  );
+
+  useEffect(() => {
+    if (user) {
+      loadTranscripts();
+    }
+  }, [user, loadTranscripts]);
+
+  useEffect(() => {
+    if (searchTerm.trim()) {
+      handleSearch(searchTerm);
+    } else {
       setFilteredTranscripts(transcripts);
     }
-  };
+  }, [searchTerm, transcripts, handleSearch]);
 
   const handleDeleteTranscript = (transcriptId: string) => {
     setTranscripts((prev) => prev.filter((t) => t.id !== transcriptId));

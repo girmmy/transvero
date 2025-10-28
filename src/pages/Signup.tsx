@@ -187,13 +187,27 @@ const Signup: React.FC = () => {
                 className="ml-2 block text-sm text-gray-900"
               >
                 I agree to the{" "}
-                <a href="#" className="text-blue-600 hover:text-blue-500">
+                <button
+                  type="button"
+                  className="text-blue-600 hover:text-blue-500"
+                  onClick={() => {
+                    // TODO: Implement terms of service modal/page
+                    console.log("Terms of Service clicked");
+                  }}
+                >
                   Terms of Service
-                </a>{" "}
+                </button>{" "}
                 and{" "}
-                <a href="#" className="text-blue-600 hover:text-blue-500">
+                <button
+                  type="button"
+                  className="text-blue-600 hover:text-blue-500"
+                  onClick={() => {
+                    // TODO: Implement privacy policy modal/page
+                    console.log("Privacy Policy clicked");
+                  }}
+                >
                   Privacy Policy
-                </a>
+                </button>
               </label>
             </div>
 
