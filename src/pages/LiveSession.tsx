@@ -14,6 +14,7 @@ import LanguageSelector from "../components/LanguageSelector";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ManualTextInput from "../components/ManualTextInput";
 import BrowserCompatibility from "../components/BrowserCompatibility";
+import ConfirmDialog from "../components/ConfirmDialog";
 import { detectBrowser, BrowserInfo } from "../utils/browserDetection";
 import {
   FiSave,
@@ -41,6 +42,10 @@ const LiveSession: React.FC = () => {
   const [browserInfo, setBrowserInfo] = useState<BrowserInfo | null>(null);
   const [showCompatibilityInfo, setShowCompatibilityInfo] = useState(false);
   const [useManualInput, setUseManualInput] = useState(false);
+  
+  // Confirm dialog state
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
 
   // Session state
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
@@ -59,7 +64,7 @@ const LiveSession: React.FC = () => {
     // Check browser support
     if (!speechRecognitionService.isBrowserSupported()) {
       setIsSupported(false);
-      setError(speechRecognitionService.getFallbackMessage());
+      setError("");
       setShowCompatibilityInfo(true);
       return;
     }
@@ -121,6 +126,28 @@ const LiveSession: React.FC = () => {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
+  const handleNavigationWithConfirm = (navigationFn: () => void) => {
+    if (hasUnsavedChanges) {
+      setPendingNavigation(() => navigationFn);
+      setShowConfirmDialog(true);
+    } else {
+      navigationFn();
+    }
+  };
+
+  const handleConfirmNavigation = () => {
+    setShowConfirmDialog(false);
+    if (pendingNavigation) {
+      pendingNavigation();
+      setPendingNavigation(null);
+    }
+  };
+
+  const handleCancelNavigation = () => {
+    setShowConfirmDialog(false);
+    setPendingNavigation(null);
+  };
+
   useEffect(() => {
     // Load previous session from localStorage only on first load
     const savedSession = localStorage.getItem("transvero-session");
@@ -141,7 +168,7 @@ const LiveSession: React.FC = () => {
     }
   }, [transcript, sessionStartTime]);
 
-  const handleStartRecording = () => {
+  const handleStartRecording = async () => {
     if (!user) {
       navigate("/login");
       return;
@@ -257,15 +284,7 @@ const LiveSession: React.FC = () => {
   };
 
   const handleBackToDashboard = () => {
-    if (hasUnsavedChanges) {
-      const confirmed = window.confirm(
-        "You have unsaved changes in your current session. If you leave now, your recording history will be lost. Are you sure you want to go back to the dashboard?"
-      );
-      if (!confirmed) {
-        return;
-      }
-    }
-    navigate("/dashboard");
+    handleNavigationWithConfirm(() => navigate("/dashboard"));
   };
 
   const handleExportPDF = () => {
@@ -293,45 +312,64 @@ const LiveSession: React.FC = () => {
 
   if (!isSupported && !useManualInput) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="max-w-lg mx-auto text-center">
           <FiAlertCircle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Speech Recognition Not Available
+            Browser Not Supported
           </h2>
-          <div className="whitespace-pre-line text-gray-600 mb-6 text-left">
-            {error}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <p className="text-gray-700 mb-4">
+              Speech recognition requires a supported browser for optimal functionality.
+            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+              <h3 className="font-bold text-blue-900 mb-3 text-base">
+                Please use one of these supported browsers:
+              </h3>
+              <ul className="text-sm text-blue-800 space-y-2">
+                <li className="flex items-center">
+                  <span className="font-bold mr-2">✓</span>
+                  <span><strong className="font-bold">Google Chrome</strong> - Full support (Recommended)</span>
+                </li>
+                <li className="flex items-center">
+                  <span className="font-bold mr-2">✓</span>
+                  <span><strong className="font-bold">Microsoft Edge</strong> - Full support</span>
+                </li>
+                <li className="flex items-center">
+                  <span className="font-bold mr-2">✓</span>
+                  <span><strong className="font-bold">Safari</strong> - Full support (macOS/iOS)</span>
+                </li>
+              </ul>
+            </div>
+            {browserInfo && (
+              <div className="mt-4 text-sm text-gray-600">
+                <p>Current browser: <strong>{browserInfo.name} {browserInfo.version}</strong></p>
+              </div>
+            )}
           </div>
 
-          {browserInfo && (
-            <div className="mb-6">
-              <BrowserCompatibility browserInfo={browserInfo} />
-            </div>
-          )}
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
-            <h3 className="font-semibold text-blue-900 mb-2">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-left">
+            <h3 className="font-semibold text-yellow-900 mb-2">
               Alternative Options:
             </h3>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Use manual text input instead</li>
+            <ul className="text-sm text-yellow-800 space-y-1">
+              <li>• Use manual text input mode (works in any browser)</li>
+              <li>• Switch to a supported browser for speech recognition</li>
               <li>• Copy-paste text from other sources</li>
-              <li>• Try a different browser (Chrome, Edge, Safari)</li>
-              <li>• Check microphone permissions</li>
             </ul>
           </div>
 
-          <div className="flex space-x-3 justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => setUseManualInput(true)}
-              className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              className="inline-flex items-center justify-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
               <FiType className="h-5 w-5 mr-2" />
               Use Manual Input
             </button>
             <button
               onClick={handleBackToDashboard}
-              className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="inline-flex items-center justify-center px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
               <FiArrowLeft className="h-5 w-5 mr-2" />
               Back to Dashboard
@@ -343,7 +381,20 @@ const LiveSession: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={showConfirmDialog}
+        title="Unsaved Changes"
+        message="You have unsaved changes in your current session. If you leave now, your recording history will be lost. Are you sure you want to continue?"
+        confirmText="Leave Page"
+        cancelText="Stay on Page"
+        onConfirm={handleConfirmNavigation}
+        onCancel={handleCancelNavigation}
+        type="warning"
+      />
+
+      <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
@@ -467,6 +518,7 @@ const LiveSession: React.FC = () => {
           </div>
         )}
 
+
         {/* Input Mode Toggle */}
         {isSupported && (
           <div className="mb-4 sm:mb-6 bg-white p-3 sm:p-4 rounded-lg shadow-sm border border-gray-200">
@@ -534,6 +586,7 @@ const LiveSession: React.FC = () => {
         )}
       </div>
     </div>
+    </>
   );
 };
 

@@ -21,7 +21,7 @@ A real-time speech recognition and transcription application built with React, T
 - **Styling**: Tailwind CSS
 - **Authentication**: Firebase Authentication
 - **Database**: Cloud Firestore
-- **Speech Recognition**: Web Speech API
+- **Speech Recognition**: Hybrid system - AssemblyAI API (primary, works in all browsers) or Web Speech API (fallback)
 - **PDF Generation**: jsPDF
 - **Icons**: React Icons
 - **Routing**: React Router DOM
@@ -31,7 +31,8 @@ A real-time speech recognition and transcription application built with React, T
 - Node.js (v16 or higher)
 - npm or yarn
 - Firebase project with Authentication and Firestore enabled
-- Modern browser with Web Speech API support (Chrome, Edge, Safari)
+- (Optional) AssemblyAI API key for speech recognition that works in all browsers
+- Modern browser (any modern browser works with API, Chrome/Edge/Safari for Web Speech API fallback)
 
 ## Setup Instructions
 
@@ -57,6 +58,10 @@ REACT_APP_FIREBASE_PROJECT_ID=your_project_id
 REACT_APP_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
 REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 REACT_APP_FIREBASE_APP_ID=your_app_id
+
+# Optional: AssemblyAI API Key for speech recognition (works in all browsers including Brave)
+# Get your free API key at https://www.assemblyai.com/
+REACT_APP_ASSEMBLYAI_API_KEY=your_assemblyai_api_key_here
 ```
 
 ### 3. Firestore Security Rules
@@ -120,10 +125,17 @@ The application will open at `http://localhost:3000`
 
 ## Browser Compatibility
 
-- **Chrome**: Full support for Web Speech API
-- **Edge**: Full support for Web Speech API
-- **Safari**: Full support for Web Speech API
-- **Firefox**: Limited support (may not work properly)
+**With AssemblyAI API (Recommended):**
+- **All modern browsers**: Full support including Chrome, Edge, Safari, Firefox, and Brave
+- No browser-specific configuration needed
+- Works even with privacy shields enabled
+
+**Without API (Fallback to Web Speech API):**
+- **Chrome**: Full support
+- **Edge**: Full support
+- **Safari**: Full support
+- **Firefox**: Limited support
+- **Brave**: Requires disabling shields and cross-site tracker blocking
 
 ## Accessibility Features
 

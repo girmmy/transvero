@@ -101,11 +101,11 @@ export class SpeechRecognitionService {
 
   private detectBrowserSupport(): void {
     const userAgent = navigator.userAgent;
+    // Brave detection: check navigator.brave first (most reliable), then user agent
+    const isBrave = !!(window as any).brave || /Brave/.test(userAgent);
     this.browserSupport = {
       chrome:
-        /Chrome/.test(userAgent) &&
-        !/Edge/.test(userAgent) &&
-        !/Brave/.test(userAgent),
+        (/Chrome/.test(userAgent) && !/Edge/.test(userAgent)) || isBrave,
       edge: /Edge/.test(userAgent),
       safari: /Safari/.test(userAgent) && !/Chrome/.test(userAgent),
       firefox: /Firefox/.test(userAgent),
@@ -114,12 +114,23 @@ export class SpeechRecognitionService {
   }
 
   private initializeRecognition(): void {
-    // Try different speech recognition implementations
-    const SpeechRecognition =
-      window.SpeechRecognition ||
-      window.webkitSpeechRecognition ||
-      (window as any).mozSpeechRecognition ||
-      (window as any).msSpeechRecognition;
+    // Detect Brave first (most reliable method)
+    const isBrave = !!(window as any).brave || /Brave/.test(navigator.userAgent);
+    
+    // For Brave, prioritize webkitSpeechRecognition
+    let SpeechRecognition: any = null;
+    
+    if (isBrave) {
+      // Brave is Chromium-based and uses webkit prefix
+      SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+    } else {
+      // For other browsers, try standard first, then webkit
+      SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition ||
+        (window as any).mozSpeechRecognition ||
+        (window as any).msSpeechRecognition;
+    }
 
     if (SpeechRecognition) {
       try {
@@ -128,9 +139,23 @@ export class SpeechRecognitionService {
         this.setupRecognition();
       } catch (error) {
         console.warn("Failed to initialize speech recognition:", error);
-        this.isSupported = false;
+        
+        // If first attempt fails and we haven't tried webkit, try it
+        if (!isBrave && window.webkitSpeechRecognition && !this.recognition) {
+          try {
+            this.recognition = new window.webkitSpeechRecognition();
+            this.isSupported = true;
+            this.setupRecognition();
+          } catch (webkitError) {
+            console.warn("Failed to initialize with webkit prefix:", webkitError);
+            this.isSupported = false;
+          }
+        } else {
+          this.isSupported = false;
+        }
       }
     } else {
+      // No SpeechRecognition API found
       this.isSupported = false;
     }
   }
@@ -161,9 +186,22 @@ export class SpeechRecognitionService {
     onEnd?: () => void
   ): void {
     if (!this.recognition || !this.isSupported) {
-      onError(
-        "Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari."
-      );
+      const isBrave = !!(window as any).brave || /Brave/.test(navigator.userAgent);
+      if (isBrave) {
+        onError(
+          "Speech recognition is not available in Brave.\n\n" +
+          "To enable speech recognition in Brave:\n" +
+          "1. Click the Brave Shield icon (lion icon) in the address bar\n" +
+          "2. Toggle 'Shields down' for this site\n" +
+          "3. Go to brave://settings/privacy and ensure microphone access is allowed\n" +
+          "4. Refresh this page and try again\n\n" +
+          "Alternatively, use the manual text input feature."
+        );
+      } else {
+        onError(
+          "Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari."
+        );
+      }
       return;
     }
 
@@ -176,10 +214,23 @@ export class SpeechRecognitionService {
         })
         .catch((error) => {
           console.error("Microphone access error:", error);
+          const isBrave = !!(window as any).brave || /Brave/.test(navigator.userAgent);
+          
           if (error.name === "NotAllowedError") {
-            onError(
-              "Microphone access denied. Please allow microphone permissions and refresh the page."
-            );
+            if (isBrave) {
+              onError(
+                "Microphone access denied in Brave.\n\n" +
+                "To fix this:\n" +
+                "1. Click the Brave Shield icon and disable shields for this site\n" +
+                "2. Go to brave://settings/privacy and allow microphone access\n" +
+                "3. Check site permissions in brave://settings/content/microphone\n" +
+                "4. Refresh the page and try again"
+              );
+            } else {
+              onError(
+                "Microphone access denied. Please allow microphone permissions and refresh the page."
+              );
+            }
           } else if (error.name === "NotFoundError") {
             onError(
               "No microphone found. Please connect a microphone and try again."
@@ -207,6 +258,99 @@ export class SpeechRecognitionService {
     onEnd?: () => void
   ): void {
     if (!this.recognition) return;
+
+    // Set up error handler FIRST to catch network errors immediately
+    const isBrave = !!(window as any).brave || /Brave/.test(navigator.userAgent);
+    this.recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error, event.message);
+      let errorMessage = "Speech recognition error occurred";
+
+      switch (event.error) {
+        case "no-speech":
+          errorMessage =
+            "No speech detected. Please speak clearly into your microphone.";
+          break;
+        case "audio-capture":
+          errorMessage =
+            "No microphone found. Please check that your microphone is connected and working.";
+          break;
+        case "not-allowed":
+          const browserInfoNotAllowed = this.getBrowserInfo();
+          if (browserInfoNotAllowed.name === "Brave") {
+            errorMessage =
+              "Microphone permission denied in Brave.\n\n" +
+              "To fix this:\n" +
+              "1. Click the Brave Shield icon and disable shields for this site\n" +
+              "2. Go to brave://settings/privacy and allow microphone access\n" +
+              "3. Check site permissions in brave://settings/content/microphone\n" +
+              "4. Refresh the page and try again";
+          } else {
+            errorMessage =
+              "Microphone permission denied. Please allow microphone access in your browser settings and refresh the page.";
+          }
+          break;
+        case "network":
+          const browserInfo = this.getBrowserInfo();
+          if (browserInfo.name === "Brave" || isBrave) {
+            errorMessage =
+              "Network error: Brave is blocking the speech recognition service.\n\n" +
+              "The Web Speech API requires access to Google's speech service, which Brave blocks by default.\n\n" +
+              "To enable speech recognition in Brave:\n" +
+              "1. Click the Brave Shield icon (lion) in the address bar\n" +
+              "2. Toggle 'Shields down' for this site (REQUIRED)\n" +
+              "3. Go to brave://settings/privacy\n" +
+              "4. Disable 'Block cross-site trackers' (REQUIRED - the API needs this)\n" +
+              "5. Go to brave://settings/content/all\n" +
+              "6. Ensure microphone is allowed\n" +
+              "7. Refresh this page completely (Ctrl+Shift+R or Cmd+Shift+R)\n\n" +
+              "Alternatively, use the 'Manual Input' mode which doesn't require the speech API.";
+          } else {
+            errorMessage =
+              "Network error occurred. This might be due to:\n• Poor internet connection\n• Firewall blocking speech recognition\n• Browser security settings\n\nPlease check your internet connection and try again.";
+          }
+          break;
+        case "aborted":
+          errorMessage =
+            "Speech recognition was stopped. This usually happens when:\n• The microphone is disconnected\n• Another app is using the microphone\n• The browser tab lost focus\n\nPlease check your microphone and try again.";
+          break;
+        case "language-not-supported":
+          errorMessage =
+            "Selected language is not supported by your browser. Please try a different language.";
+          break;
+        case "service-not-allowed":
+          const browserInfoService = this.getBrowserInfo();
+          if (browserInfoService.name === "Brave" || isBrave) {
+            errorMessage =
+              "Speech recognition service is blocked by Brave's privacy settings.\n\n" +
+              "To enable:\n" +
+              "1. Disable Brave Shields for this site\n" +
+              "2. Go to brave://settings/content/all\n" +
+              "3. Allow microphone and ensure 'Block cross-site trackers' is disabled\n" +
+              "4. Refresh and try again";
+          } else {
+            errorMessage =
+              "Speech recognition service is not allowed. Please check your browser's privacy settings.";
+          }
+          break;
+        case "bad-grammar":
+          errorMessage = "Speech recognition grammar error. Please try again.";
+          break;
+        default:
+          if (isBrave) {
+            errorMessage = `Speech recognition error: ${event.error}\n\n` +
+              `This is likely because Brave is blocking the speech recognition service.\n\n` +
+              `Try:\n` +
+              `1. Disable Brave Shields for this site\n` +
+              `2. Disable 'Block cross-site trackers' in brave://settings/privacy\n` +
+              `3. Refresh the page\n\n` +
+              `Or use Manual Input mode instead.`;
+          } else {
+            errorMessage = `Speech recognition error: ${event.error}\n\nThis might be due to:\n• Browser compatibility issues\n• Microphone hardware problems\n• Network connectivity issues\n\nPlease try refreshing the page or using a different browser.`;
+          }
+      }
+
+      onError(errorMessage);
+    };
 
     this.recognition.onstart = () => {
       console.log("Speech recognition started successfully");
@@ -246,54 +390,8 @@ export class SpeechRecognitionService {
       }
     };
 
-    this.recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event.error, event.message);
-      let errorMessage = "Speech recognition error occurred";
-
-      switch (event.error) {
-        case "no-speech":
-          errorMessage =
-            "No speech detected. Please speak clearly into your microphone.";
-          break;
-        case "audio-capture":
-          errorMessage =
-            "No microphone found. Please check that your microphone is connected and working.";
-          break;
-        case "not-allowed":
-          errorMessage =
-            "Microphone permission denied. Please allow microphone access in your browser settings and refresh the page.";
-          break;
-        case "network":
-          const browserInfo = this.getBrowserInfo();
-          if (browserInfo.name === "Brave") {
-            errorMessage =
-              "Network error in Brave browser. This is likely due to Brave's privacy settings.\n\nTo fix this:\n• Click the Brave Shield icon (lion icon) in the address bar\n• Toggle 'Shields down' for this site\n• Refresh the page and try again\n• Or go to brave://settings/privacy and allow microphone access\n\nYou can also use manual text input as an alternative.";
-          } else {
-            errorMessage =
-              "Network error occurred. This might be due to:\n• Poor internet connection\n• Firewall blocking speech recognition\n• Browser security settings\n\nPlease check your internet connection and try again.";
-          }
-          break;
-        case "aborted":
-          errorMessage =
-            "Speech recognition was stopped. This usually happens when:\n• The microphone is disconnected\n• Another app is using the microphone\n• The browser tab lost focus\n\nPlease check your microphone and try again.";
-          break;
-        case "language-not-supported":
-          errorMessage =
-            "Selected language is not supported by your browser. Please try a different language.";
-          break;
-        case "service-not-allowed":
-          errorMessage =
-            "Speech recognition service is not allowed. Please check your browser's privacy settings.";
-          break;
-        case "bad-grammar":
-          errorMessage = "Speech recognition grammar error. Please try again.";
-          break;
-        default:
-          errorMessage = `Speech recognition error: ${event.error}\n\nThis might be due to:\n• Browser compatibility issues\n• Microphone hardware problems\n• Network connectivity issues\n\nPlease try refreshing the page or using a different browser.`;
-      }
-
-      onError(errorMessage);
-    };
+    // Error handler is already set up earlier in this function
+    // No need to set it again here
 
     try {
       console.log("Starting speech recognition...");
@@ -320,16 +418,20 @@ export class SpeechRecognitionService {
 
   public getBrowserInfo(): { name: string; support: boolean } {
     const userAgent = navigator.userAgent;
-    const isBrave = /Brave/.test(userAgent) || (window as any).brave;
+    // Check for Brave using the most reliable method first
+    const isBrave = !!(window as any).brave || /Brave/.test(userAgent);
 
     if (isBrave) {
-      return { name: "Brave", support: true };
+      // Brave is Chromium-based and supports Web Speech API
+      // Force check if webkitSpeechRecognition exists
+      const hasWebkit = !!window.webkitSpeechRecognition;
+      return { name: "Brave", support: this.isSupported && hasWebkit };
     } else if (this.browserSupport.chrome) {
-      return { name: "Chrome", support: true };
+      return { name: "Chrome", support: this.isSupported };
     } else if (this.browserSupport.edge) {
-      return { name: "Edge", support: true };
+      return { name: "Edge", support: this.isSupported };
     } else if (this.browserSupport.safari) {
-      return { name: "Safari", support: true };
+      return { name: "Safari", support: this.isSupported };
     } else if (this.browserSupport.firefox) {
       return { name: "Firefox", support: false };
     } else if (this.browserSupport.opera) {
@@ -411,6 +513,8 @@ export class SpeechRecognitionService {
         "no-NO",
         "da-DK",
         "fi-FI",
+        "vi-VN",
+        "am-ET",
       ];
     }
 
@@ -426,6 +530,7 @@ export class SpeechRecognitionService {
         "ja-JP",
         "ko-KR",
         "zh-CN",
+        "vi-VN",
       ];
     }
 

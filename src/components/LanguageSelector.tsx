@@ -24,6 +24,8 @@ const languages = [
   { code: "ar-SA", name: "Arabic" },
   { code: "hi-IN", name: "Hindi" },
   { code: "nl-NL", name: "Dutch" },
+  { code: "vi-VN", name: "Vietnamese" },
+  { code: "am-ET", name: "Amharic" },
 ];
 
 const LanguageSelector: React.FC<LanguageSelectorProps> = ({

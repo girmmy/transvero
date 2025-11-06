@@ -12,7 +12,7 @@
     "@types/node": "^16.18.126",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "firebase": "^12.4.0",
+    "firebase": "^12.5.0",
     "jspdf": "^3.0.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -26,7 +26,10 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "firebase": "firebase",
+    "functions:deploy": "firebase deploy --only functions",
+    "functions:serve": "cd functions && npm run serve"
   },
   "eslintConfig": {
     "extends": [
@@ -49,7 +52,7 @@
   "devDependencies": {
     "@types/react-icons": "^2.2.7",
     "autoprefixer": "^10.4.21",
-    "firebase-tools": "^14.22.0",
+    "firebase-tools": "^14.23.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.18"
   }

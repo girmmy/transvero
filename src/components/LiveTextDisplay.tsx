@@ -1,5 +1,5 @@
 // Live Text Display Component
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { FiClock } from "react-icons/fi";
 
 interface LiveTextDisplayProps {
@@ -11,6 +11,17 @@ const LiveTextDisplay: React.FC<LiveTextDisplayProps> = ({
   transcript,
   isRecording,
 }) => {
+  // Text size state (in pixels, default 18px)
+  const [textSize, setTextSize] = useState(() => {
+    const saved = localStorage.getItem("transvero-text-size");
+    return saved ? parseInt(saved, 10) : 18;
+  });
+
+  // Save text size to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem("transvero-text-size", textSize.toString());
+  }, [textSize]);
+
   const formatTime = () => {
     const now = new Date();
     return now.toLocaleTimeString([], {
@@ -24,10 +35,22 @@ const LiveTextDisplay: React.FC<LiveTextDisplayProps> = ({
     if (!text) return "";
 
     return text.split("\n").map((line, index) => (
-      <p key={index} className="mb-2 text-gray-800 text-lg leading-relaxed">
+      <p
+        key={index}
+        className="mb-2 text-gray-800 leading-relaxed"
+        style={{ fontSize: `${textSize}px` }}
+      >
         {line}
       </p>
     ));
+  };
+
+  const handleIncreaseSize = () => {
+    setTextSize((prev) => Math.min(prev + 2, 48)); // Max 48px
+  };
+
+  const handleDecreaseSize = () => {
+    setTextSize((prev) => Math.max(prev - 2, 12)); // Min 12px
   };
 
   return (
@@ -45,9 +68,35 @@ const LiveTextDisplay: React.FC<LiveTextDisplayProps> = ({
             </div>
           )}
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-500">
-          <FiClock className="h-4 w-4" />
-          <span>{formatTime()}</span>
+        <div className="flex items-center space-x-4">
+          {/* Text Size Controls */}
+          <div className="flex items-center space-x-2 bg-gray-100 rounded-lg px-2 py-1">
+            <button
+              onClick={handleDecreaseSize}
+              disabled={textSize <= 12}
+              className="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 font-semibold"
+              title="Decrease text size"
+              aria-label="Decrease text size"
+            >
+              −
+            </button>
+            <span className="text-sm font-medium text-gray-700 min-w-[2.5rem] text-center">
+              {textSize}px
+            </span>
+            <button
+              onClick={handleIncreaseSize}
+              disabled={textSize >= 48}
+              className="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-700 font-semibold"
+              title="Increase text size"
+              aria-label="Increase text size"
+            >
+              +
+            </button>
+          </div>
+          <div className="flex items-center space-x-2 text-sm text-gray-500">
+            <FiClock className="h-4 w-4" />
+            <span>{formatTime()}</span>
+          </div>
         </div>
       </div>
 
