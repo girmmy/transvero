@@ -1,9 +1,11 @@
 // PDF export utility
-import jsPDF from "jspdf";
 import { Transcript } from "../types";
 
-export const exportTranscriptToPDF = (transcript: Transcript): void => {
+export const exportTranscriptToPDF = async (transcript: Transcript): Promise<void> => {
   try {
+    // Dynamic import to avoid chunk loading issues
+    const jsPDFModule = await import("jspdf");
+    const jsPDF = jsPDFModule.default;
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();

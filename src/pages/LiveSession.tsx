@@ -287,7 +287,7 @@ const LiveSession: React.FC = () => {
     handleNavigationWithConfirm(() => navigate("/dashboard"));
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!transcript.trim()) return;
 
     const title = generateTranscriptTitle();
@@ -300,7 +300,12 @@ const LiveSession: React.FC = () => {
       language,
     };
 
-    exportTranscriptToPDF(transcriptData);
+    try {
+      await exportTranscriptToPDF(transcriptData);
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      setError("Failed to export PDF. Please try again.");
+    }
   };
 
   const handleLanguageChange = (newLanguage: string) => {
@@ -312,21 +317,21 @@ const LiveSession: React.FC = () => {
 
   if (!isSupported && !useManualInput) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
         <div className="max-w-lg mx-auto text-center">
-          <FiAlertCircle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          <FiAlertCircle className="h-16 w-16 text-yellow-500 dark:text-yellow-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
             Browser Not Supported
           </h2>
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <p className="text-gray-700 mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+            <p className="text-gray-700 dark:text-gray-300 mb-4">
               Speech recognition requires a supported browser for optimal functionality.
             </p>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
-              <h3 className="font-bold text-blue-900 mb-3 text-base">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-left">
+              <h3 className="font-bold text-blue-900 dark:text-blue-300 mb-3 text-base">
                 Please use one of these supported browsers:
               </h3>
-              <ul className="text-sm text-blue-800 space-y-2">
+              <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-2">
                 <li className="flex items-center">
                   <span className="font-bold mr-2">✓</span>
                   <span><strong className="font-bold">Google Chrome</strong> - Full support (Recommended)</span>
@@ -342,17 +347,17 @@ const LiveSession: React.FC = () => {
               </ul>
             </div>
             {browserInfo && (
-              <div className="mt-4 text-sm text-gray-600">
+              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
                 <p>Current browser: <strong>{browserInfo.name} {browserInfo.version}</strong></p>
               </div>
             )}
           </div>
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-left">
-            <h3 className="font-semibold text-yellow-900 mb-2">
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6 text-left">
+            <h3 className="font-semibold text-yellow-900 dark:text-yellow-300 mb-2">
               Alternative Options:
             </h3>
-            <ul className="text-sm text-yellow-800 space-y-1">
+            <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
               <li>• Use manual text input mode (works in any browser)</li>
               <li>• Switch to a supported browser for speech recognition</li>
               <li>• Copy-paste text from other sources</li>
@@ -362,14 +367,14 @@ const LiveSession: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => setUseManualInput(true)}
-              className="inline-flex items-center justify-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              className="inline-flex items-center justify-center px-6 py-3 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors"
             >
               <FiType className="h-5 w-5 mr-2" />
               Use Manual Input
             </button>
             <button
               onClick={handleBackToDashboard}
-              className="inline-flex items-center justify-center px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="inline-flex items-center justify-center px-6 py-3 bg-gray-600 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
             >
               <FiArrowLeft className="h-5 w-5 mr-2" />
               Back to Dashboard
@@ -394,7 +399,7 @@ const LiveSession: React.FC = () => {
         type="warning"
       />
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
@@ -402,15 +407,15 @@ const LiveSession: React.FC = () => {
             <div>
               <button
                 onClick={handleBackToDashboard}
-                className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-2 sm:mb-4 text-sm sm:text-base"
+                className="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-2 sm:mb-4 text-sm sm:text-base"
               >
                 <FiArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                 Back to Dashboard
               </button>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
                 Live Session
               </h1>
-              <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">
+              <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-300">
                 Real-time speech recognition and transcription
               </p>
             </div>
@@ -421,7 +426,7 @@ const LiveSession: React.FC = () => {
                 <>
                   <button
                     onClick={handleStartNewSession}
-                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm sm:text-base"
+                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors text-sm sm:text-base"
                   >
                     <FiPlus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                     <span className="hidden sm:inline">Start New Session</span>
@@ -430,7 +435,7 @@ const LiveSession: React.FC = () => {
 
                   <button
                     onClick={handleExportPDF}
-                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm sm:text-base"
+                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors text-sm sm:text-base"
                   >
                     <FiDownload className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                     <span className="hidden sm:inline">Export PDF</span>
@@ -440,7 +445,7 @@ const LiveSession: React.FC = () => {
                   <button
                     onClick={handleSaveTranscript}
                     disabled={isSaving}
-                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm sm:text-base"
+                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50 text-sm sm:text-base"
                   >
                     {isSaving ? (
                       <LoadingSpinner size="sm" text="" />
@@ -471,8 +476,8 @@ const LiveSession: React.FC = () => {
                 disabled={isSaving}
               />
             ) : (
-              <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">
+              <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
                   Recording Controls
                 </h3>
                 <RecorderControls
@@ -488,7 +493,7 @@ const LiveSession: React.FC = () => {
 
           {/* Language Selector */}
           <div>
-            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
               <LanguageSelector
                 selectedLanguage={language}
                 onLanguageChange={handleLanguageChange}
@@ -510,7 +515,7 @@ const LiveSession: React.FC = () => {
 
         {/* Error Message */}
         {error && !showCompatibilityInfo && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-md">
             <div className="flex items-start">
               <FiAlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
               <div className="whitespace-pre-line text-sm">{error}</div>
@@ -521,9 +526,9 @@ const LiveSession: React.FC = () => {
 
         {/* Input Mode Toggle */}
         {isSupported && (
-          <div className="mb-4 sm:mb-6 bg-white p-3 sm:p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="mb-4 sm:mb-6 bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
                 Input Mode
               </h3>
               <div className="flex space-x-2">
@@ -532,8 +537,8 @@ const LiveSession: React.FC = () => {
                   disabled={!isSupported}
                   className={`inline-flex items-center justify-center px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${
                     !useManualInput
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      ? "bg-blue-600 dark:bg-blue-500 text-white"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
                   } ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                   <FiMic className="h-4 w-4 mr-2" />
@@ -544,8 +549,8 @@ const LiveSession: React.FC = () => {
                   onClick={handleSwitchToManual}
                   className={`inline-flex items-center justify-center px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${
                     useManualInput
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      ? "bg-blue-600 dark:bg-blue-500 text-white"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
                   }`}
                 >
                   <FiType className="h-4 w-4 mr-2" />
@@ -554,7 +559,7 @@ const LiveSession: React.FC = () => {
                 </button>
               </div>
             </div>
-            <p className="text-xs sm:text-sm text-gray-600 mt-2 sm:mt-3">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-2 sm:mt-3">
               {useManualInput
                 ? "Type or paste text manually. Perfect for unsupported browsers or when you prefer typing."
                 : "Use your microphone for real-time speech recognition. Works best in Chrome, Edge, or Safari."}
@@ -572,8 +577,8 @@ const LiveSession: React.FC = () => {
 
         {/* Session Info */}
         {sessionStartTime && (
-          <div className="mt-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between text-sm text-gray-600">
+          <div className="mt-6 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
               <span>
                 Session started: {sessionStartTime.toLocaleTimeString()}
               </span>

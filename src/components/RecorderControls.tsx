@@ -23,8 +23,8 @@ const RecorderControls: React.FC<RecorderControlsProps> = ({
           focus:outline-none focus:ring-4 focus:ring-opacity-50
           ${
             isRecording
-              ? "bg-red-500 hover:bg-red-600 focus:ring-red-300 text-white"
-              : "bg-blue-500 hover:bg-blue-600 focus:ring-blue-300 text-white"
+              ? "bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700 focus:ring-red-300 dark:focus:ring-red-400 text-white"
+              : "bg-blue-500 dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700 focus:ring-blue-300 dark:focus:ring-blue-400 text-white"
           }
           ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
         `}
@@ -38,15 +38,15 @@ const RecorderControls: React.FC<RecorderControlsProps> = ({
       </button>
 
       <div className="text-center sm:text-left">
-        <p className="text-xs sm:text-sm text-gray-600">
+        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
           {isRecording
             ? "Recording... Click to stop"
             : "Click to start recording"}
         </p>
         {isRecording && (
           <div className="flex items-center justify-center sm:justify-start mt-1">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
-            <span className="text-xs text-red-600">LIVE</span>
+            <div className="w-2 h-2 bg-red-500 dark:bg-red-400 rounded-full animate-pulse mr-2"></div>
+            <span className="text-xs text-red-600 dark:text-red-400">LIVE</span>
           </div>
         )}
       </div>

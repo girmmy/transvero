@@ -37,7 +37,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     <div className="relative">
       <label
         htmlFor="language-select"
-        className="block text-sm font-medium text-gray-700 mb-2"
+        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
       >
         Recognition Language
       </label>
@@ -48,8 +48,8 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
           onChange={(e) => onLanguageChange(e.target.value)}
           disabled={disabled}
           className={`
-            appearance-none bg-white border border-gray-300 rounded-md px-4 py-2 pr-10
-            text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+            appearance-none bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 pr-10
+            text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
             ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
           `}
         >
@@ -60,10 +60,10 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
           ))}
         </select>
         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-          <FiChevronDown className="h-4 w-4 text-gray-400" />
+          <FiChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" />
         </div>
       </div>
-      <div className="flex items-center mt-1 text-xs text-gray-500">
+      <div className="flex items-center mt-1 text-xs text-gray-500 dark:text-gray-400">
         <FiGlobe className="h-3 w-3 mr-1" />
         <span>Language affects speech recognition accuracy</span>
       </div>

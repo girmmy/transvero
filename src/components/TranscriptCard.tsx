@@ -39,9 +39,9 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
     }
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     try {
-      exportTranscriptToPDF(transcript);
+      await exportTranscriptToPDF(transcript);
     } catch (error) {
       console.error("Error exporting PDF:", error);
       alert("Failed to export PDF. Please try again.");
@@ -57,23 +57,23 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
       {/* Header */}
       <div className="flex justify-between items-start mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
           {transcript.title}
         </h3>
         <div className="flex space-x-2 ml-4">
           <button
             onClick={() => setShowFullContent(!showFullContent)}
-            className="p-2 text-gray-500 hover:text-blue-600 transition-colors"
+            className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
             aria-label="View transcript"
           >
             <FiEye className="h-4 w-4" />
           </button>
           <button
             onClick={handleExportPDF}
-            className="p-2 text-gray-500 hover:text-green-600 transition-colors"
+            className="p-2 text-gray-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
             aria-label="Download PDF"
           >
             <FiDownload className="h-4 w-4" />
@@ -81,7 +81,7 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
           <button
             onClick={handleDelete}
             disabled={isDeleting}
-            className="p-2 text-gray-500 hover:text-red-600 transition-colors disabled:opacity-50"
+            className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
             aria-label="Delete transcript"
           >
             <FiTrash2 className="h-4 w-4" />
@@ -90,7 +90,7 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
       </div>
 
       {/* Metadata */}
-      <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+      <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mb-3">
         <div className="flex items-center space-x-1">
           <FiClock className="h-4 w-4" />
           <span>{formatTimestamp(transcript.timestamp)}</span>
@@ -102,14 +102,14 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
           </div>
         )}
         {transcript.speakers && (
-          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+          <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-2 py-1 rounded-full text-xs">
             Multi-speaker
           </span>
         )}
       </div>
 
       {/* Content */}
-      <div className="text-gray-700">
+      <div className="text-gray-700 dark:text-gray-300">
         {showFullContent ? (
           <div className="whitespace-pre-wrap max-h-96 overflow-y-auto">
             {transcript.content}
@@ -123,7 +123,7 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
       {!showFullContent && transcript.content.length > 200 && (
         <button
           onClick={() => setShowFullContent(true)}
-          className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium"
+          className="mt-3 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium"
         >
           Read more
         </button>
