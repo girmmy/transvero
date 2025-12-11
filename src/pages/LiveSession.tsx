@@ -7,6 +7,7 @@ import {
   exportTranscriptToPDF,
   generateTranscriptTitle,
 } from "../utils/pdfExporter";
+import { exportTranscriptToBRF } from "../utils/brfExporter";
 import { speechRecognitionService } from "../utils/speechRecognition";
 import RecorderControls from "../components/RecorderControls";
 import LiveTextDisplay from "../components/LiveTextDisplay";
@@ -308,6 +309,27 @@ const LiveSession: React.FC = () => {
     }
   };
 
+  const handleExportBRF = async () => {
+    if (!transcript.trim()) return;
+
+    const title = generateTranscriptTitle();
+    const transcriptData = {
+      id: "temp",
+      title,
+      content: transcript,
+      timestamp: sessionStartTime?.toISOString() || new Date().toISOString(),
+      speakers: false,
+      language,
+    };
+
+    try {
+      await exportTranscriptToBRF(transcriptData);
+    } catch (error) {
+      console.error("Error exporting BRF:", error);
+      setError("Failed to export BRF. Please try again.");
+    }
+  };
+
   const handleLanguageChange = (newLanguage: string) => {
     setLanguage(newLanguage);
     if (recognitionRef.current) {
@@ -441,6 +463,17 @@ const LiveSession: React.FC = () => {
                     <span className="hidden sm:inline">Export PDF</span>
                     <span className="sm:hidden">PDF</span>
                   </button>
+
+                  <button
+                    onClick={handleExportBRF}
+                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors text-sm sm:text-base"
+                  >
+                    <FiDownload className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                    <span className="hidden sm:inline">Export BRF</span>
+                    <span className="sm:hidden">BRF</span>
+                  </button>
+
+                  
 
                   <button
                     onClick={handleSaveTranscript}

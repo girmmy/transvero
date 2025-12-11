@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { Transcript } from "../types";
 import { exportTranscriptToPDF, formatTimestamp } from "../utils/pdfExporter";
+import { exportTranscriptToBRF } from "../utils/brfExporter";
 import { deleteTranscript } from "../services/firestoreService";
 import { useAuth } from "../contexts/AuthContext";
 import { FiEye, FiDownload, FiTrash2, FiClock, FiGlobe } from "react-icons/fi";
@@ -75,6 +76,13 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
             onClick={handleExportPDF}
             className="p-2 text-gray-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
             aria-label="Download PDF"
+          >
+            <FiDownload className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => exportTranscriptToBRF(transcript)}
+            className="p-2 text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+            aria-label="Download BRF"
           >
             <FiDownload className="h-4 w-4" />
           </button>

@@ -18,6 +18,22 @@ export const saveTranscript = async (
   userId: string,
   transcript: Omit<Transcript, "id">
 ): Promise<string> => {
+  const useDevFallback = !db && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    const key = `dev_transcripts_${userId}`;
+    const raw = localStorage.getItem(key);
+    const items: Transcript[] = raw ? JSON.parse(raw) : [];
+    const id = `dev-${Date.now()}`;
+    const item: Transcript = {
+      id,
+      ...transcript,
+      timestamp: new Date(transcript.timestamp).toISOString(),
+    } as Transcript;
+    items.unshift(item);
+    localStorage.setItem(key, JSON.stringify(items));
+    return id;
+  }
+
   try {
     const docRef = await addDoc(
       collection(db, "users", userId, COLLECTION_NAME),
@@ -35,6 +51,14 @@ export const saveTranscript = async (
 export const getUserTranscripts = async (
   userId: string
 ): Promise<Transcript[]> => {
+  const useDevFallback = !db && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    const key = `dev_transcripts_${userId}`;
+    const raw = localStorage.getItem(key);
+    const items: Transcript[] = raw ? JSON.parse(raw) : [];
+    return items;
+  }
+
   try {
     const q = query(
       collection(db, "users", userId, COLLECTION_NAME),
@@ -56,6 +80,16 @@ export const deleteTranscript = async (
   userId: string,
   transcriptId: string
 ): Promise<void> => {
+  const useDevFallback = !db && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    const key = `dev_transcripts_${userId}`;
+    const raw = localStorage.getItem(key);
+    const items: Transcript[] = raw ? JSON.parse(raw) : [];
+    const filtered = items.filter((t) => t.id !== transcriptId);
+    localStorage.setItem(key, JSON.stringify(filtered));
+    return;
+  }
+
   try {
     await deleteDoc(doc(db, "users", userId, COLLECTION_NAME, transcriptId));
   } catch (error: any) {
@@ -67,6 +101,18 @@ export const searchTranscripts = async (
   userId: string,
   searchTerm: string
 ): Promise<Transcript[]> => {
+  const useDevFallback = !db && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    const key = `dev_transcripts_${userId}`;
+    const raw = localStorage.getItem(key);
+    const items: Transcript[] = raw ? JSON.parse(raw) : [];
+    return items.filter(
+      (transcript) =>
+        transcript.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        transcript.content.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }
+
   try {
     const q = query(
       collection(db, "users", userId, COLLECTION_NAME),

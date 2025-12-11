@@ -12,13 +12,33 @@ const firebaseConfig = {
   appId: process.env.REACT_APP_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Validate minimal required config values before initializing Firebase.
+const hasFirebaseConfig =
+  typeof firebaseConfig.apiKey === "string" && firebaseConfig.apiKey?.length > 0 &&
+  typeof firebaseConfig.projectId === "string" && firebaseConfig.projectId?.length > 0 &&
+  typeof firebaseConfig.appId === "string" && firebaseConfig.appId?.length > 0;
 
-// Initialize Firebase Authentication and get a reference to the service
-export const auth = getAuth(app);
+let app: any = null;
+let _auth: any = null;
+let _db: any = null;
 
-// Initialize Cloud Firestore and get a reference to the service
-export const db = getFirestore(app);
+if (hasFirebaseConfig) {
+  try {
+    app = initializeApp(firebaseConfig as any);
+    _auth = getAuth(app);
+    _db = getFirestore(app);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Firebase initialization error:", err);
+  }
+} else {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "Firebase config incomplete — skipping initialization. Set REACT_APP_FIREBASE_* env vars to enable Firebase."
+  );
+}
+
+export const auth = _auth;
+export const db = _db;
 
 export default app;

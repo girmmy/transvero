@@ -9,10 +9,49 @@ import {
 import { auth } from "../utils/firebase";
 import { User } from "../types";
 
+// Development fallback listeners and helpers (used when Firebase is not configured)
+const devAuthListeners: Array<(user: User | null) => void> = [];
+
+const notifyDevAuthListeners = (user: User | null) => {
+  if (user) {
+    localStorage.setItem("dev_auth_current", JSON.stringify(user));
+  } else {
+    localStorage.removeItem("dev_auth_current");
+  }
+  devAuthListeners.forEach((cb) => {
+    try {
+      cb(user);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("dev auth listener error:", e);
+    }
+  });
+};
+
 export const createUser = async (
   email: string,
   password: string
 ): Promise<User> => {
+  const useDevFallback = !auth && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    const raw = localStorage.getItem("dev_auth_users");
+    const users: Array<{ uid: string; email: string; password: string }> = raw
+      ? JSON.parse(raw)
+      : [];
+
+    if (users.some((u) => u.email === email)) {
+      throw new Error(getAuthErrorMessage("auth/email-already-in-use"));
+    }
+
+    const uid = `dev-${Date.now()}`;
+    users.push({ uid, email, password });
+    localStorage.setItem("dev_auth_users", JSON.stringify(users));
+    const user = { uid, email, displayName: undefined } as User;
+    notifyDevAuthListeners(user);
+    return user;
+  }
+
+  if (!auth) throw new Error("Firebase not configured: cannot create user.");
   try {
     const userCredential = await createUserWithEmailAndPassword(
       auth,
@@ -33,6 +72,27 @@ export const signInUser = async (
   email: string,
   password: string
 ): Promise<User> => {
+  const useDevFallback = !auth && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    const raw = localStorage.getItem("dev_auth_users");
+    const users: Array<{ uid: string; email: string; password: string }> = raw
+      ? JSON.parse(raw)
+      : [];
+
+    const found = users.find((u) => u.email === email);
+    if (!found) {
+      throw new Error(getAuthErrorMessage("auth/user-not-found"));
+    }
+    if (found.password !== password) {
+      throw new Error(getAuthErrorMessage("auth/wrong-password"));
+    }
+
+    const user = { uid: found.uid, email: found.email, displayName: undefined } as User;
+    notifyDevAuthListeners(user);
+    return user;
+  }
+
+  if (!auth) throw new Error("Firebase not configured: cannot sign in.");
   try {
     const userCredential = await signInWithEmailAndPassword(
       auth,
@@ -50,6 +110,16 @@ export const signInUser = async (
 };
 
 export const logoutUser = async (): Promise<void> => {
+  const useDevFallback = !auth && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    localStorage.removeItem("dev_auth_current");
+    notifyDevAuthListeners(null);
+    return;
+  }
+
+  if (!auth) {
+    return;
+  }
   try {
     await signOut(auth);
   } catch (error: any) {
@@ -58,6 +128,25 @@ export const logoutUser = async (): Promise<void> => {
 };
 
 export const onAuthChange = (callback: (user: User | null) => void) => {
+  const useDevFallback = !auth && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    devAuthListeners.push(callback);
+    const rawCurrent = localStorage.getItem("dev_auth_current");
+    const current = rawCurrent ? JSON.parse(rawCurrent) : null;
+    setTimeout(() => callback(current), 0);
+    return () => {
+      const idx = devAuthListeners.indexOf(callback);
+      if (idx !== -1) devAuthListeners.splice(idx, 1);
+    };
+  }
+
+  if (!auth) {
+    setTimeout(() => callback(null), 0);
+    return () => {
+      /* no-op unsubscribe */
+    };
+  }
+
   return onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
     if (firebaseUser) {
       callback({
