@@ -25,6 +25,7 @@ import {
   FiMic,
   FiType,
   FiPlus,
+  FiChevronDown,
 } from "react-icons/fi";
 
 const LiveSession: React.FC = () => {
@@ -52,6 +53,7 @@ const LiveSession: React.FC = () => {
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Refs
   const recognitionRef = useRef<any>(null);
@@ -455,23 +457,40 @@ const LiveSession: React.FC = () => {
                     <span className="sm:hidden">New</span>
                   </button>
 
-                  <button
-                    onClick={handleExportPDF}
-                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors text-sm sm:text-base"
-                  >
-                    <FiDownload className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                    <span className="hidden sm:inline">Export PDF</span>
-                    <span className="sm:hidden">PDF</span>
-                  </button>
+                  <div className="relative inline-block">
+                    <button
+                      onClick={() => setExportOpen((s) => !s)}
+                      className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors text-sm sm:text-base"
+                    >
+                      <FiDownload className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                      <span className="hidden sm:inline">Export</span>
+                      <span className="sm:hidden">Export</span>
+                      <FiChevronDown className="h-4 w-4 ml-2" />
+                    </button>
 
-                  <button
-                    onClick={handleExportBRF}
-                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors text-sm sm:text-base"
-                  >
-                    <FiDownload className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                    <span className="hidden sm:inline">Export BRF</span>
-                    <span className="sm:hidden">BRF</span>
-                  </button>
+                    {exportOpen && (
+                      <div className="absolute right-0 mt-2 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-md z-50">
+                        <button
+                          onClick={() => {
+                            setExportOpen(false);
+                            handleExportPDF();
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          Export PDF
+                        </button>
+                        <button
+                          onClick={() => {
+                            setExportOpen(false);
+                            handleExportBRF();
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          Export BRF
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   
 

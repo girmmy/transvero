@@ -5,7 +5,7 @@ import { exportTranscriptToPDF, formatTimestamp } from "../utils/pdfExporter";
 import { exportTranscriptToBRF } from "../utils/brfExporter";
 import { deleteTranscript } from "../services/firestoreService";
 import { useAuth } from "../contexts/AuthContext";
-import { FiEye, FiDownload, FiTrash2, FiClock, FiGlobe } from "react-icons/fi";
+import { FiEye, FiDownload, FiTrash2, FiClock, FiGlobe, FiChevronDown } from "react-icons/fi";
 
 interface TranscriptCardProps {
   transcript: Transcript;
@@ -19,6 +19,7 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
   const { user } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showFullContent, setShowFullContent] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const handleDelete = async () => {
     if (
@@ -64,7 +65,7 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
           {transcript.title}
         </h3>
-        <div className="flex space-x-2 ml-4">
+        <div className="flex space-x-2 ml-4 relative">
           <button
             onClick={() => setShowFullContent(!showFullContent)}
             className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
@@ -72,20 +73,43 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
           >
             <FiEye className="h-4 w-4" />
           </button>
-          <button
-            onClick={handleExportPDF}
-            className="p-2 text-gray-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
-            aria-label="Download PDF"
-          >
-            <FiDownload className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => exportTranscriptToBRF(transcript)}
-            className="p-2 text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-            aria-label="Download BRF"
-          >
-            <FiDownload className="h-4 w-4" />
-          </button>
+
+          {/* Export dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setExportOpen((s) => !s)}
+              className="inline-flex items-center p-2 text-gray-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors rounded"
+              aria-haspopup="true"
+              aria-expanded={exportOpen}
+            >
+              <FiDownload className="h-4 w-4 mr-1" />
+              <FiChevronDown className="h-4 w-4" />
+            </button>
+
+            {exportOpen && (
+              <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-md z-50">
+                <button
+                  onClick={() => {
+                    setExportOpen(false);
+                    handleExportPDF();
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Export PDF
+                </button>
+                <button
+                  onClick={() => {
+                    setExportOpen(false);
+                    exportTranscriptToBRF(transcript);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Export BRF
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={handleDelete}
             disabled={isDeleting}
