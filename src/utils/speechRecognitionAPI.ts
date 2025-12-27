@@ -14,6 +14,7 @@ export class SpeechRecognitionAPIService {
   private sessionId: string | null = null;
   private apiKey: string;
   private language: string = "en";
+  private isProcessing: boolean = false;
   private onResultCallback: ((text: string, isFinal: boolean) => void) | null = null;
   private onErrorCallback: ((error: string) => void) | null = null;
 
@@ -21,7 +22,7 @@ export class SpeechRecognitionAPIService {
     // Get API key from environment or use provided one
     // Note: API key not required if using Firebase Functions proxy
     this.apiKey = apiKey || process.env.REACT_APP_ASSEMBLYAI_API_KEY || "";
-    
+
     // Debug logging (only in development)
     if (process.env.NODE_ENV === "development") {
       console.log("Speech Recognition API Service initialized");
@@ -88,8 +89,8 @@ export class SpeechRecognitionAPIService {
       // Initialize audio context
       this.audioContext = new (window.AudioContext ||
         (window as any).webkitAudioContext)({
-        sampleRate: 16000,
-      });
+          sampleRate: 16000,
+        });
 
       // Create audio source
       const source = this.audioContext.createMediaStreamSource(this.mediaStream);
@@ -114,12 +115,12 @@ export class SpeechRecognitionAPIService {
         const { getFunctions, httpsCallable } = await import("firebase/functions");
         const functions = getFunctions();
         const getToken = httpsCallable(functions, "getAssemblyAIToken");
-        
+
         const result = await getToken({ expires_in: 3600 });
         tokenData = result.data as { token: string };
       } catch (proxyError: any) {
         console.warn("Firebase Functions proxy not available, trying direct API:", proxyError);
-        
+
         // Fallback to direct API call (may be blocked by Brave)
         try {
           const tokenResponse = await fetch("https://api.assemblyai.com/v2/realtime/token", {
@@ -173,7 +174,7 @@ export class SpeechRecognitionAPIService {
 
       this.socket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        
+
         if (data.message_type === "SessionBegins") {
           this.sessionId = data.session_id;
         } else if (data.message_type === "PartialTranscript") {
@@ -220,7 +221,7 @@ export class SpeechRecognitionAPIService {
     } catch (error: any) {
       console.error("Error starting speech recognition:", error);
       const isBrave = !!(window as any).brave || /Brave/.test(navigator.userAgent);
-      
+
       if (this.onErrorCallback) {
         if (error.name === "NotAllowedError") {
           this.onErrorCallback(
@@ -278,7 +279,7 @@ export class SpeechRecognitionAPIService {
 
   private cleanup(): void {
     this.isRecording = false;
-    
+
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach((track) => track.stop());
       this.mediaStream = null;
@@ -311,6 +312,110 @@ export class SpeechRecognitionAPIService {
       (window.AudioContext || (window as any).webkitAudioContext) &&
       typeof WebSocket !== "undefined"
     );
+  }
+
+  public async uploadAudio(audioBlob: Blob): Promise<string> {
+    try {
+      // Direct upload to AssemblyAI
+      // Note: For larger files, it's better to use a proxy, but for short recordings this is fine
+      const response = await fetch("https://api.assemblyai.com/v2/upload", {
+        method: "POST",
+        headers: {
+          authorization: this.apiKey.trim(),
+        },
+        body: audioBlob,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.upload_url;
+    } catch (error: any) {
+      console.error("Error uploading audio:", error);
+      throw new Error(`Failed to upload audio: ${error.message}`);
+    }
+  }
+
+  public async transcribeWithDiarization(
+    audioUrl: string,
+    speakerCount: number = 2
+  ): Promise<string> {
+    try {
+      this.isProcessing = true;
+
+      // 1. Submit transcription job
+      const response = await fetch("https://api.assemblyai.com/v2/transcript", {
+        method: "POST",
+        headers: {
+          authorization: this.apiKey.trim(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          audio_url: audioUrl,
+          speaker_labels: true,
+          speakers_expected: speakerCount,
+          language_code: this.language,
+          punctuate: true,
+          format_text: true,
+          dual_channel: false,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Transcription request failed: ${response.statusText}`);
+      }
+
+      const { id } = await response.json();
+
+      // 2. Poll for completion
+      while (true) {
+        const statusResponse = await fetch(
+          `https://api.assemblyai.com/v2/transcript/${id}`,
+          {
+            headers: {
+              authorization: this.apiKey.trim(),
+            },
+          }
+        );
+
+        const statusData = await statusResponse.json();
+
+        if (statusData.status === "completed") {
+          // 3. Format result with speaker labels
+          if (!statusData.utterances) {
+            return statusData.text;
+          }
+
+          const getSpeakerLabel = (speaker: any) => {
+            if (speaker === null || speaker === undefined) return "Unknown";
+            const num = parseInt(speaker);
+            if (isNaN(num)) return speaker.toString();
+
+            // AssemblyAI speaker labels usually start from 1, but can be 0-based
+            // We'll map them to A, B, C...
+            // If num is 0 or 1, both map to 'A' to handle both common indexing schemes safely
+            const labelIndex = Math.max(0, num - (num > 0 ? 1 : 0));
+            return String.fromCharCode(65 + (labelIndex % 26));
+          };
+
+          return statusData.utterances
+            .map((u: any) => `[Speaker ${getSpeakerLabel(u.speaker)}] ${u.text}`)
+            .join("\n");
+        } else if (statusData.status === "error") {
+          throw new Error(`Transcription error: ${statusData.error}`);
+        }
+
+        // Wait 3 seconds before polling again
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    } catch (error: any) {
+      console.error("Error in diarized transcription:", error);
+      throw error;
+    } finally {
+      this.isProcessing = false;
+    }
   }
 }
 

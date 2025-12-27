@@ -39,12 +39,15 @@ const LiveSession: React.FC = () => {
   const [language, setLanguage] = useState("en-US");
   const [isSupported, setIsSupported] = useState(true);
   const [error, setError] = useState("");
+  const [isMultispeakerEnabled, setIsMultispeakerEnabled] = useState(false);
+  const [speakerCount, setSpeakerCount] = useState(2);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Browser compatibility state
   const [browserInfo, setBrowserInfo] = useState<BrowserInfo | null>(null);
   const [showCompatibilityInfo, setShowCompatibilityInfo] = useState(false);
   const [useManualInput, setUseManualInput] = useState(false);
-  
+
   // Confirm dialog state
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
@@ -58,6 +61,8 @@ const LiveSession: React.FC = () => {
   // Refs
   const recognitionRef = useRef<any>(null);
   const sessionContentRef = useRef<string[]>([]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     // Detect browser compatibility
@@ -183,6 +188,44 @@ const LiveSession: React.FC = () => {
       setSessionStartTime(new Date());
     }
 
+    if (isMultispeakerEnabled) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 44100,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+
+        // Choose best supported mime type
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : "audio/webm";
+
+        const options = {
+          mimeType,
+          audioBitsPerSecond: 128000
+        };
+
+        const mediaRecorder = new MediaRecorder(stream, options);
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.start();
+      } catch (err) {
+        console.error("Failed to start MediaRecorder:", err);
+      }
+    }
+
     recognitionRef.current?.startRecognition(
       (transcriptText: string, isFinal: boolean) => {
         if (isFinal) {
@@ -210,9 +253,44 @@ const LiveSession: React.FC = () => {
     );
   };
 
-  const handleStopRecording = () => {
+  const handleStopRecording = async () => {
     recognitionRef.current?.stopRecognition();
     setIsRecording(false);
+
+    if (isMultispeakerEnabled && mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      setIsProcessing(true);
+
+      // Wait for the media recorder to finish saving chunks
+      mediaRecorderRef.current.onstop = async () => {
+        try {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+
+          // Use the speechRecognitionAPIService directly for diarization
+          // We need to import it or ensure it's accessible
+          const { speechRecognitionAPIService } = await import("../utils/speechRecognitionAPI");
+
+          const uploadUrl = await speechRecognitionAPIService.uploadAudio(audioBlob);
+          const diarizedTranscript = await speechRecognitionAPIService.transcribeWithDiarization(
+            uploadUrl,
+            speakerCount
+          );
+
+          if (diarizedTranscript) {
+            setTranscript((prev) =>
+              prev + (prev ? "\n\n--- Multi-speaker Analysis ---\n" : "") + diarizedTranscript
+            );
+            sessionContentRef.current.push("--- Multi-speaker Analysis ---");
+            sessionContentRef.current.push(diarizedTranscript);
+          }
+        } catch (err: any) {
+          console.error("Diarization failed:", err);
+          setError(`Multi-speaker analysis failed: ${err.message}`);
+        } finally {
+          setIsProcessing(false);
+        }
+      };
+    }
   };
 
   const handleManualTextAdd = (text: string) => {
@@ -424,225 +502,279 @@ const LiveSession: React.FC = () => {
       />
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <button
-                onClick={handleBackToDashboard}
-                className="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-2 sm:mb-4 text-sm sm:text-base"
-              >
-                <FiArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                Back to Dashboard
-              </button>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
-                Live Session
-              </h1>
-              <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-300">
-                Real-time speech recognition and transcription
+        {/* Processing Overlay */}
+        {isProcessing && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4">
+              <LoadingSpinner size="lg" text="" />
+              <h3 className="mt-4 text-xl font-bold text-gray-900 dark:text-white text-center">
+                Analyzing Speakers
+              </h3>
+              <p className="mt-2 text-gray-600 dark:text-gray-400 text-center text-sm">
+                AssemblyAI is identifying different voices in your recording. This may take a moment...
               </p>
             </div>
+          </div>
+        )}
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-              {transcript && (
-                <>
-                  <button
-                    onClick={handleStartNewSession}
-                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors text-sm sm:text-base"
-                  >
-                    <FiPlus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                    <span className="hidden sm:inline">Start New Session</span>
-                    <span className="sm:hidden">New</span>
-                  </button>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header */}
+          <div className="mb-6 sm:mb-8">
+            <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <button
+                  onClick={handleBackToDashboard}
+                  className="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-2 sm:mb-4 text-sm sm:text-base"
+                >
+                  <FiArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                  Back to Dashboard
+                </button>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+                  Live Session
+                </h1>
+                <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-300">
+                  Real-time speech recognition and transcription
+                </p>
+              </div>
 
-                  <div className="relative inline-block">
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+                {transcript && (
+                  <>
                     <button
-                      onClick={() => setExportOpen((s) => !s)}
-                      className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors text-sm sm:text-base"
+                      onClick={handleStartNewSession}
+                      className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors text-sm sm:text-base"
                     >
-                      <FiDownload className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                      <span className="hidden sm:inline">Export</span>
-                      <span className="sm:hidden">Export</span>
-                      <FiChevronDown className="h-4 w-4 ml-2" />
+                      <FiPlus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                      <span className="hidden sm:inline">Start New Session</span>
+                      <span className="sm:hidden">New</span>
                     </button>
 
-                    {exportOpen && (
-                      <div className="absolute right-0 mt-2 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-md z-50">
-                        <button
-                          onClick={() => {
-                            setExportOpen(false);
-                            handleExportPDF();
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          Export PDF
-                        </button>
-                        <button
-                          onClick={() => {
-                            setExportOpen(false);
-                            handleExportBRF();
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          Export BRF
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                    <div className="relative inline-block">
+                      <button
+                        onClick={() => setExportOpen((s) => !s)}
+                        className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition-colors text-sm sm:text-base"
+                      >
+                        <FiDownload className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                        <span className="hidden sm:inline">Export</span>
+                        <span className="sm:hidden">Export</span>
+                        <FiChevronDown className="h-4 w-4 ml-2" />
+                      </button>
 
-                  
+                      {exportOpen && (
+                        <div className="absolute right-0 mt-2 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-md z-50">
+                          <button
+                            onClick={() => {
+                              setExportOpen(false);
+                              handleExportPDF();
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            Export PDF
+                          </button>
+                          <button
+                            onClick={() => {
+                              setExportOpen(false);
+                              handleExportBRF();
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            Export BRF
+                          </button>
+                        </div>
+                      )}
+                    </div>
 
-                  <button
-                    onClick={handleSaveTranscript}
-                    disabled={isSaving}
-                    className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50 text-sm sm:text-base"
-                  >
-                    {isSaving ? (
-                      <LoadingSpinner size="sm" text="" />
-                    ) : (
-                      <>
-                        <FiSave className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                        <span className="hidden sm:inline">
-                          Save Transcript
-                        </span>
-                        <span className="sm:hidden">Save</span>
-                      </>
-                    )}
-                  </button>
-                </>
+
+
+                    <button
+                      onClick={handleSaveTranscript}
+                      disabled={isSaving}
+                      className="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors disabled:opacity-50 text-sm sm:text-base"
+                    >
+                      {isSaving ? (
+                        <LoadingSpinner size="sm" text="" />
+                      ) : (
+                        <>
+                          <FiSave className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                          <span className="hidden sm:inline">
+                            Save Transcript
+                          </span>
+                          <span className="sm:hidden">Save</span>
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 mb-6 sm:mb-8">
+            {/* Main Input Controls */}
+            <div className="lg:col-span-2">
+              {useManualInput ? (
+                <ManualTextInput
+                  onTextAdd={handleManualTextAdd}
+                  onSave={handleSaveTranscript}
+                  disabled={isSaving}
+                />
+              ) : (
+                <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
+                    Recording Controls
+                  </h3>
+                  <RecorderControls
+                    isRecording={isRecording}
+                    onToggleRecording={
+                      isRecording ? handleStopRecording : handleStartRecording
+                    }
+                    disabled={!isSupported}
+                  />
+                </div>
               )}
             </div>
-          </div>
-        </div>
 
-        {/* Controls */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 mb-6 sm:mb-8">
-          {/* Main Input Controls */}
-          <div className="lg:col-span-2">
-            {useManualInput ? (
-              <ManualTextInput
-                onTextAdd={handleManualTextAdd}
-                onSave={handleSaveTranscript}
-                disabled={isSaving}
-              />
-            ) : (
+            {/* Language Selector */}
+            <div className="flex flex-col space-y-6">
               <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
-                  Recording Controls
-                </h3>
-                <RecorderControls
-                  isRecording={isRecording}
-                  onToggleRecording={
-                    isRecording ? handleStopRecording : handleStartRecording
-                  }
-                  disabled={!isSupported}
+                <LanguageSelector
+                  selectedLanguage={language}
+                  onLanguageChange={handleLanguageChange}
+                  disabled={isRecording}
                 />
               </div>
-            )}
-          </div>
 
-          {/* Language Selector */}
-          <div>
-            <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-              <LanguageSelector
-                selectedLanguage={language}
-                onLanguageChange={handleLanguageChange}
-                disabled={isRecording}
-              />
-            </div>
-          </div>
-        </div>
+              {/* Multispeaker Controls */}
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                <div className="flex flex-col space-y-3">
+                  <div className="flex items-center space-x-3 text-sm">
+                    <input
+                      id="multispeaker-toggle"
+                      type="checkbox"
+                      checked={isMultispeakerEnabled}
+                      onChange={(e) => setIsMultispeakerEnabled(e.target.checked)}
+                      disabled={isRecording || isProcessing}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 disabled:opacity-50 cursor-pointer"
+                    />
+                    <label htmlFor="multispeaker-toggle" className="font-medium text-gray-900 dark:text-white cursor-pointer select-none">
+                      Multi-speaker Analysis
+                    </label>
+                  </div>
 
-        {/* Browser Compatibility Info */}
-        {showCompatibilityInfo && browserInfo && (
-          <div className="mb-6">
-            <BrowserCompatibility
-              browserInfo={browserInfo}
-              onDismiss={() => setShowCompatibilityInfo(false)}
-            />
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && !showCompatibilityInfo && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-md">
-            <div className="flex items-start">
-              <FiAlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
-              <div className="whitespace-pre-line text-sm">{error}</div>
-            </div>
-          </div>
-        )}
-
-
-        {/* Input Mode Toggle */}
-        {isSupported && (
-          <div className="mb-4 sm:mb-6 bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
-                Input Mode
-              </h3>
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleSwitchToSpeech}
-                  disabled={!isSupported}
-                  className={`inline-flex items-center justify-center px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${
-                    !useManualInput
-                      ? "bg-blue-600 dark:bg-blue-500 text-white"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
-                  } ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  <FiMic className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">Speech Recognition</span>
-                  <span className="sm:hidden">Speech</span>
-                </button>
-                <button
-                  onClick={handleSwitchToManual}
-                  className={`inline-flex items-center justify-center px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${
-                    useManualInput
-                      ? "bg-blue-600 dark:bg-blue-500 text-white"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  <FiType className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">Manual Input</span>
-                  <span className="sm:hidden">Manual</span>
-                </button>
+                  {isMultispeakerEnabled && (
+                    <div className="flex items-center justify-between pt-1">
+                      <label htmlFor="speaker-count" className="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                        Expected Speakers:
+                      </label>
+                      <select
+                        id="speaker-count"
+                        value={speakerCount}
+                        onChange={(e) => setSpeakerCount(parseInt(e.target.value))}
+                        disabled={isRecording || isProcessing}
+                        className="ml-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
+                      >
+                        {[2, 3, 4, 5, 6, 7, 8].map((num) => (
+                          <option key={num} value={num}>
+                            {num}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-2 sm:mt-3">
-              {useManualInput
-                ? "Type or paste text manually. Perfect for unsupported browsers or when you prefer typing."
-                : "Use your microphone for real-time speech recognition. Works best in Chrome, Edge, or Safari."}
-            </p>
           </div>
-        )}
 
-        {/* Live Text Display */}
-        <LiveTextDisplay
-          transcript={
-            transcript + (interimTranscript ? "\n" + interimTranscript : "")
-          }
-          isRecording={isRecording}
-        />
 
-        {/* Session Info */}
-        {sessionStartTime && (
-          <div className="mt-6 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-              <span>
-                Session started: {sessionStartTime.toLocaleTimeString()}
-              </span>
-              <span>
-                Duration:{" "}
-                {Math.floor((Date.now() - sessionStartTime.getTime()) / 1000)}s
-              </span>
+          {/* Browser Compatibility Info */}
+          {showCompatibilityInfo && browserInfo && (
+            <div className="mb-6">
+              <BrowserCompatibility
+                browserInfo={browserInfo}
+                onDismiss={() => setShowCompatibilityInfo(false)}
+              />
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Error Message */}
+          {error && !showCompatibilityInfo && (
+            <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-md">
+              <div className="flex items-start">
+                <FiAlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+                <div className="whitespace-pre-line text-sm">{error}</div>
+              </div>
+            </div>
+          )}
+
+
+          {/* Input Mode Toggle */}
+          {isSupported && (
+            <div className="mb-4 sm:mb-6 bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
+                  Input Mode
+                </h3>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={handleSwitchToSpeech}
+                    disabled={!isSupported}
+                    className={`inline-flex items-center justify-center px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${!useManualInput
+                      ? "bg-blue-600 dark:bg-blue-500 text-white"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                      } ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    <FiMic className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Speech Recognition</span>
+                    <span className="sm:hidden">Speech</span>
+                  </button>
+                  <button
+                    onClick={handleSwitchToManual}
+                    className={`inline-flex items-center justify-center px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${useManualInput
+                      ? "bg-blue-600 dark:bg-blue-500 text-white"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                      }`}
+                  >
+                    <FiType className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Manual Input</span>
+                    <span className="sm:hidden">Manual</span>
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-2 sm:mt-3">
+                {useManualInput
+                  ? "Type or paste text manually. Perfect for unsupported browsers or when you prefer typing."
+                  : "Use your microphone for real-time speech recognition. Works best in Chrome, Edge, or Safari."}
+              </p>
+            </div>
+          )}
+
+          {/* Live Text Display */}
+          <LiveTextDisplay
+            transcript={
+              transcript + (interimTranscript ? "\n" + interimTranscript : "")
+            }
+            isRecording={isRecording}
+          />
+
+          {/* Session Info */}
+          {sessionStartTime && (
+            <div className="mt-6 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                <span>
+                  Session started: {sessionStartTime.toLocaleTimeString()}
+                </span>
+                <span>
+                  Duration:{" "}
+                  {Math.floor((Date.now() - sessionStartTime.getTime()) / 1000)}s
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
     </>
   );
 };
