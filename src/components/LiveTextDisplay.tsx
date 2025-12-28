@@ -123,7 +123,11 @@ const LiveTextDisplay: React.FC<LiveTextDisplayProps> = ({
       <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
         <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
           <span>
-            {transcript ? `${transcript.length} characters` : "No content yet"}
+            {transcript ? (() => {
+              // Remove speaker labels like "[Speaker A]" and count only actual text
+              const textOnly = transcript.replace(/\[Speaker [A-Z]\]\s*/g, '').trim();
+              return `${textOnly.length} characters`;
+            })() : "No content yet"}
           </span>
           <span>
             {isRecording ? "Recording in progress..." : "Ready to record"}

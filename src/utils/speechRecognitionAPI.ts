@@ -393,11 +393,9 @@ export class SpeechRecognitionAPIService {
             const num = parseInt(speaker);
             if (isNaN(num)) return speaker.toString();
 
-            // AssemblyAI speaker labels usually start from 1, but can be 0-based
-            // We'll map them to A, B, C...
-            // If num is 0 or 1, both map to 'A' to handle both common indexing schemes safely
-            const labelIndex = Math.max(0, num - (num > 0 ? 1 : 0));
-            return String.fromCharCode(65 + (labelIndex % 26));
+            // AssemblyAI uses 0-based speaker indexing (0, 1, 2, ...)
+            // Map to alphabetical labels: 0→A, 1→B, 2→C, etc.
+            return String.fromCharCode(65 + (num % 26));
           };
 
           return statusData.utterances

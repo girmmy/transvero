@@ -90,12 +90,6 @@ const Dashboard: React.FC = () => {
       icon: <FiClock className="h-6 w-6 text-green-600 dark:text-green-400" />,
       color: "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400",
     },
-    {
-      label: "Multi-speaker",
-      value: transcripts.filter((t) => t.speakers).length,
-      icon: <FiMic className="h-6 w-6 text-purple-600 dark:text-purple-400" />,
-      color: "bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400",
-    },
   ];
 
   if (loading) {
@@ -133,7 +127,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8 max-w-3xl mx-auto">
           {stats.map((stat, index) => (
             <div
               key={index}
