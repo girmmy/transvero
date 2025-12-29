@@ -65,9 +65,21 @@ const Dashboard: React.FC = () => {
     }
   }, [searchTerm, transcripts, handleSearch]);
 
-  const handleDeleteTranscript = (transcriptId: string) => {
+  const handleDeleteTranscript = async (transcriptId: string) => {
+    // Optimistically update UI
     setTranscripts((prev) => prev.filter((t) => t.id !== transcriptId));
     setFilteredTranscripts((prev) => prev.filter((t) => t.id !== transcriptId));
+    
+    // Refetch from database to ensure consistency
+    // This ensures deleted items don't reappear if there's any sync issue
+    if (user) {
+      try {
+        await loadTranscripts();
+      } catch (error) {
+        console.error("Error refetching transcripts after deletion:", error);
+        // If refetch fails, the optimistic update still stands
+      }
+    }
   };
 
   const stats = [
@@ -116,7 +128,7 @@ const Dashboard: React.FC = () => {
             </div>
             <div className="mt-3 sm:mt-0">
               <Link
-                to="/live"
+                to="/live?new=true"
                 className="inline-flex items-center px-3 sm:px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm sm:text-base"
               >
                 <FiMic className="h-4 w-4 mr-2" />
@@ -199,7 +211,7 @@ const Dashboard: React.FC = () => {
             </p>
             {!searchTerm && (
               <Link
-                to="/live"
+                to="/live?new=true"
                 className="inline-flex items-center px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm sm:text-base"
               >
                 <FiMic className="h-4 w-4 mr-2" />

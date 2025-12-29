@@ -1,6 +1,6 @@
 // Live Session Page Component
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { saveTranscript } from "../services/firestoreService";
 import {
@@ -31,6 +31,7 @@ import {
 const LiveSession: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Speech recognition state
   const [isRecording, setIsRecording] = useState(false);
@@ -101,7 +102,7 @@ const LiveSession: React.FC = () => {
   }, [language, isRecording]);
 
   useEffect(() => {
-    // Auto-save to localStorage
+    // Auto-save to localStorage with timestamp
     if (transcript) {
       localStorage.setItem(
         "transvero-session",
@@ -109,6 +110,7 @@ const LiveSession: React.FC = () => {
           transcript,
           sessionStartTime: sessionStartTime?.toISOString(),
           language,
+          savedAt: new Date().toISOString(), // Add timestamp for session freshness check
         })
       );
     }
@@ -157,24 +159,54 @@ const LiveSession: React.FC = () => {
   };
 
   useEffect(() => {
+    // Check if we should start a fresh session (e.g., from URL parameter or coming from Dashboard)
+    const urlParams = new URLSearchParams(location.search);
+    const startNew = urlParams.get("new") === "true";
+    
+    // If explicitly starting new, clear any saved session
+    if (startNew) {
+      localStorage.removeItem("transvero-session");
+      sessionStorage.removeItem("transvero-loaded");
+      return;
+    }
+    
     // Load previous session from localStorage only on first load
+    // Only restore if session is recent (within 1 hour) to prevent old sessions from reappearing
     const savedSession = localStorage.getItem("transvero-session");
     const hasLoadedBefore = sessionStorage.getItem("transvero-loaded");
 
     if (savedSession && !transcript && !sessionStartTime && !hasLoadedBefore) {
       try {
         const session = JSON.parse(savedSession);
-        setTranscript(session.transcript || "");
-        setLanguage(session.language || "en-US");
-        if (session.sessionStartTime) {
-          setSessionStartTime(new Date(session.sessionStartTime));
+        
+        // Check if session is recent (within 1 hour)
+        const SESSION_MAX_AGE = 60 * 60 * 1000; // 1 hour in milliseconds
+        const now = new Date().getTime();
+        const savedAt = session.savedAt ? new Date(session.savedAt).getTime() : 0;
+        const isRecent = savedAt && (now - savedAt) < SESSION_MAX_AGE;
+        
+        // Only restore if session is recent or if savedAt is not present (for backward compatibility with old sessions)
+        // If session is old, clear it to prevent it from reappearing
+        if (isRecent || !session.savedAt) {
+          setTranscript(session.transcript || "");
+          setLanguage(session.language || "en-US");
+          if (session.sessionStartTime) {
+            setSessionStartTime(new Date(session.sessionStartTime));
+          }
+          sessionStorage.setItem("transvero-loaded", "true");
+        } else {
+          // Session is too old, clear it
+          localStorage.removeItem("transvero-session");
+          sessionStorage.setItem("transvero-loaded", "true");
         }
-        sessionStorage.setItem("transvero-loaded", "true");
       } catch (error) {
         console.error("Error loading saved session:", error);
+        // If there's an error parsing, clear the corrupted session
+        localStorage.removeItem("transvero-session");
+        sessionStorage.setItem("transvero-loaded", "true");
       }
     }
-  }, [transcript, sessionStartTime]);
+  }, [transcript, sessionStartTime, location.search]);
 
   const handleStartRecording = async () => {
     if (!user) {

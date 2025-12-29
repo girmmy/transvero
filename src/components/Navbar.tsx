@@ -99,7 +99,7 @@ const Navbar: React.FC = () => {
                   Dashboard
                 </Link>
                 <Link
-                  to="/live"
+                  to="/live?new=true"
                   className="bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600 px-4 py-2 rounded-md text-sm font-medium transition-colors"
                 >
                   Start Session
@@ -188,7 +188,7 @@ const Navbar: React.FC = () => {
                     Dashboard
                   </Link>
                   <Link
-                    to="/live"
+                    to="/live?new=true"
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="block px-3 py-2 bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600 rounded-md text-base font-medium transition-colors"
                   >

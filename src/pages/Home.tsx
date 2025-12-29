@@ -76,7 +76,7 @@ const Home: React.FC = () => {
                     Go to Dashboard
                   </Link>
                   <Link
-                    to="/live"
+                    to="/live?new=true"
                     className="bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 border-2 border-blue-600 dark:border-blue-500 px-6 sm:px-8 py-3 rounded-lg text-base sm:text-lg font-medium hover:bg-blue-50 dark:hover:bg-gray-600 transition-colors"
                   >
                     Start New Session
