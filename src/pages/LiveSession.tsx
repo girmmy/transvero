@@ -693,7 +693,7 @@ const LiveSession: React.FC = () => {
                     </label>
                     <div className="group relative flex items-center">
                       <FiInfo className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 ml-1 cursor-help" />
-                      <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 w-48 p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 text-center pointer-events-none">
+                      <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 w-64 max-w-xs p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 text-center pointer-events-none whitespace-normal break-words">
                         When you end the recording, Transvero will process the audio and replace the text with speaker labels.
                         <div className="absolute left-1/2 top-full -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
                       </div>

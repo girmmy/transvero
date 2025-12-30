@@ -151,15 +151,6 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
         )}
       </div>
 
-      {/* Footer */}
-      {!showFullContent && transcript.content.length > 200 && (
-        <button
-          onClick={() => setShowFullContent(true)}
-          className="mt-3 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium"
-        >
-          Read more
-        </button>
-      )}
     </div>
   );
 };

@@ -29,9 +29,9 @@ const Home: React.FC = () => {
     },
     {
       icon: <FiDownload className="h-8 w-8 text-blue-600 dark:text-blue-400" />,
-      title: "PDF Export",
+      title: "PDF & BRF Export",
       description:
-        "Download your transcripts as formatted PDF documents for easy sharing and archiving.",
+        "Download your transcripts as formatted PDF documents or BRF files for easy sharing and archiving.",
     },
     {
       icon: <FiUsers className="h-8 w-8 text-blue-600 dark:text-blue-400" />,
