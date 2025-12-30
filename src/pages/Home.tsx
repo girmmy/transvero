@@ -31,7 +31,7 @@ const Home: React.FC = () => {
       icon: <FiDownload className="h-8 w-8 text-blue-600 dark:text-blue-400" />,
       title: "PDF & BRF Export",
       description:
-        "Download your transcripts as formatted PDF documents or BRF files for easy sharing and archiving.",
+        "Download your transcripts as formatted PDF documents or BRF files for easy sharing and archiving even for the blind!",
     },
     {
       icon: <FiUsers className="h-8 w-8 text-blue-600 dark:text-blue-400" />,
@@ -60,7 +60,8 @@ const Home: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 md:py-20">
           <div className="text-center">
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-6">
-              <span className="text-blue-600 dark:text-blue-400">Trans</span>vero
+              <span className="text-blue-600 dark:text-blue-400">Trans</span>
+              vero
             </h1>
             <p className="text-lg sm:text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-6 sm:mb-8 max-w-3xl mx-auto px-4">
               Real-time captions and transcriptions for accessibility,
@@ -160,7 +161,8 @@ const Home: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h3 className="text-xl sm:text-2xl font-bold mb-4">
-              <span className="text-blue-400 dark:text-blue-500">Trans</span>vero
+              <span className="text-blue-400 dark:text-blue-500">Trans</span>
+              vero
             </h3>
             <p className="text-gray-400 dark:text-gray-500 mb-4 text-sm sm:text-base px-4">
               Making communication accessible through real-time transcription
