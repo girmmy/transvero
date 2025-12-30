@@ -69,7 +69,7 @@ const Dashboard: React.FC = () => {
     // Optimistically update UI
     setTranscripts((prev) => prev.filter((t) => t.id !== transcriptId));
     setFilteredTranscripts((prev) => prev.filter((t) => t.id !== transcriptId));
-    
+
     // Refetch from database to ensure consistency
     // This ensures deleted items don't reappear if there's any sync issue
     if (user) {

@@ -26,6 +26,7 @@ import {
   FiType,
   FiPlus,
   FiChevronDown,
+  FiInfo,
 } from "react-icons/fi";
 
 const LiveSession: React.FC = () => {
@@ -162,14 +163,14 @@ const LiveSession: React.FC = () => {
     // Check if we should start a fresh session (e.g., from URL parameter or coming from Dashboard)
     const urlParams = new URLSearchParams(location.search);
     const startNew = urlParams.get("new") === "true";
-    
+
     // If explicitly starting new, clear any saved session
     if (startNew) {
       localStorage.removeItem("transvero-session");
       sessionStorage.removeItem("transvero-loaded");
       return;
     }
-    
+
     // Load previous session from localStorage only on first load
     // Only restore if session is recent (within 1 hour) to prevent old sessions from reappearing
     const savedSession = localStorage.getItem("transvero-session");
@@ -178,13 +179,13 @@ const LiveSession: React.FC = () => {
     if (savedSession && !transcript && !sessionStartTime && !hasLoadedBefore) {
       try {
         const session = JSON.parse(savedSession);
-        
+
         // Check if session is recent (within 1 hour)
         const SESSION_MAX_AGE = 60 * 60 * 1000; // 1 hour in milliseconds
         const now = new Date().getTime();
         const savedAt = session.savedAt ? new Date(session.savedAt).getTime() : 0;
         const isRecent = savedAt && (now - savedAt) < SESSION_MAX_AGE;
-        
+
         // Only restore if session is recent or if savedAt is not present (for backward compatibility with old sessions)
         // If session is old, clear it to prevent it from reappearing
         if (isRecent || !session.savedAt) {
@@ -309,11 +310,8 @@ const LiveSession: React.FC = () => {
           );
 
           if (diarizedTranscript) {
-            setTranscript((prev) =>
-              prev + (prev ? "\n\n--- Multi-speaker Analysis ---\n" : "") + diarizedTranscript
-            );
-            sessionContentRef.current.push("--- Multi-speaker Analysis ---");
-            sessionContentRef.current.push(diarizedTranscript);
+            setTranscript(diarizedTranscript);
+            sessionContentRef.current = [diarizedTranscript];
           }
         } catch (err: any) {
           console.error("Diarization failed:", err);
@@ -543,7 +541,7 @@ const LiveSession: React.FC = () => {
                 Analyzing Speakers
               </h3>
               <p className="mt-2 text-gray-600 dark:text-gray-400 text-center text-sm">
-                AssemblyAI is identifying different voices in your recording. This may take a moment...
+                Transvero is identifying different voices in your recording. This may take a moment...
               </p>
             </div>
           </div>
@@ -693,6 +691,13 @@ const LiveSession: React.FC = () => {
                     <label htmlFor="multispeaker-toggle" className="font-medium text-gray-900 dark:text-white cursor-pointer select-none">
                       Multi-speaker Analysis
                     </label>
+                    <div className="group relative flex items-center">
+                      <FiInfo className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 ml-1 cursor-help" />
+                      <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 w-48 p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 text-center pointer-events-none">
+                        When you end the recording, Transvero will process the audio and replace the text with speaker labels.
+                        <div className="absolute left-1/2 top-full -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                      </div>
+                    </div>
                   </div>
 
                   {isMultispeakerEnabled && (
