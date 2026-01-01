@@ -3,8 +3,10 @@ import {
   collection,
   addDoc,
   getDocs,
+  getDoc,
   deleteDoc,
   doc,
+  updateDoc,
   query,
   orderBy,
   Timestamp,
@@ -73,6 +75,99 @@ export const getUserTranscripts = async (
     })) as Transcript[];
   } catch (error: any) {
     throw new Error("Failed to load transcripts. Please try again.");
+  }
+};
+
+export const getTranscriptById = async (
+  userId: string,
+  transcriptId: string
+): Promise<Transcript | null> => {
+  const useDevFallback = !db && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    const key = `dev_transcripts_${userId}`;
+    const raw = localStorage.getItem(key);
+    const items: Transcript[] = raw ? JSON.parse(raw) : [];
+    return items.find((t) => t.id === transcriptId) || null;
+  }
+
+  try {
+    const docRef = doc(db, "users", userId, COLLECTION_NAME, transcriptId);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      return null;
+    }
+
+    return {
+      id: docSnap.id,
+      ...docSnap.data(),
+      timestamp: docSnap.data().timestamp.toDate().toISOString(),
+    } as Transcript;
+  } catch (error: any) {
+    throw new Error("Failed to load transcript. Please try again.");
+  }
+};
+
+export const appendToTranscript = async (
+  userId: string,
+  transcriptId: string,
+  newContent: string
+): Promise<void> => {
+  const useDevFallback = !db && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    const key = `dev_transcripts_${userId}`;
+    const raw = localStorage.getItem(key);
+    const items: Transcript[] = raw ? JSON.parse(raw) : [];
+    const updated = items.map((t) =>
+      t.id === transcriptId
+        ? { ...t, content: t.content + "\n\n" + newContent }
+        : t
+    );
+    localStorage.setItem(key, JSON.stringify(updated));
+    return;
+  }
+
+  try {
+    const docRef = doc(db, "users", userId, COLLECTION_NAME, transcriptId);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      throw new Error("Transcript not found.");
+    }
+
+    const currentContent = docSnap.data().content as string;
+    await updateDoc(docRef, {
+      content: currentContent + "\n\n" + newContent,
+    });
+  } catch (error: any) {
+    throw new Error("Failed to append to transcript. Please try again.");
+  }
+};
+
+export const updateTranscript = async (
+  userId: string,
+  transcriptId: string,
+  updates: Partial<Transcript>
+): Promise<void> => {
+  const useDevFallback = !db && process.env.NODE_ENV === "development";
+  if (useDevFallback) {
+    const key = `dev_transcripts_${userId}`;
+    const raw = localStorage.getItem(key);
+    const items: Transcript[] = raw ? JSON.parse(raw) : [];
+    const updated = items.map((t) =>
+      t.id === transcriptId ? { ...t, ...updates } : t
+    );
+    localStorage.setItem(key, JSON.stringify(updated));
+    return;
+  }
+
+  try {
+    await updateDoc(
+      doc(db, "users", userId, COLLECTION_NAME, transcriptId),
+      updates
+    );
+  } catch (error: any) {
+    throw new Error("Failed to update transcript. Please try again.");
   }
 };
 

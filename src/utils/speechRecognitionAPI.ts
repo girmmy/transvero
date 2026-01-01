@@ -1,11 +1,6 @@
 // External Speech Recognition API Service
 // Uses AssemblyAI for real-time transcription (works in all browsers including Brave)
 
-interface TranscriptionResult {
-  text: string;
-  isFinal: boolean;
-}
-
 export class SpeechRecognitionAPIService {
   private audioContext: AudioContext | null = null;
   private mediaStream: MediaStream | null = null;

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { saveTranscript } from "../services/firestoreService";
+import { saveTranscript, getTranscriptById, appendToTranscript } from "../services/firestoreService";
 import {
   exportTranscriptToPDF,
   generateTranscriptTitle,
@@ -27,6 +27,7 @@ import {
   FiPlus,
   FiChevronDown,
   FiInfo,
+  FiPlay,
 } from "react-icons/fi";
 
 const LiveSession: React.FC = () => {
@@ -59,6 +60,8 @@ const LiveSession: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [continuingTranscriptId, setContinuingTranscriptId] = useState<string | null>(null);
+  const [originalTranscriptContent, setOriginalTranscriptContent] = useState("");
 
   // Refs
   const recognitionRef = useRef<any>(null);
@@ -163,11 +166,40 @@ const LiveSession: React.FC = () => {
     // Check if we should start a fresh session (e.g., from URL parameter or coming from Dashboard)
     const urlParams = new URLSearchParams(location.search);
     const startNew = urlParams.get("new") === "true";
+    const continueId = urlParams.get("continue");
 
     // If explicitly starting new, clear any saved session
     if (startNew) {
       localStorage.removeItem("transvero-session");
       sessionStorage.removeItem("transvero-loaded");
+      setContinuingTranscriptId(null);
+      setOriginalTranscriptContent("");
+      return;
+    }
+
+    // Load existing transcript if continuing
+    if (continueId && user && !continuingTranscriptId) {
+      const loadExistingTranscript = async () => {
+        try {
+          const existingTranscript = await getTranscriptById(user.uid, continueId);
+          if (existingTranscript) {
+            setContinuingTranscriptId(continueId);
+            setOriginalTranscriptContent(existingTranscript.content);
+            setTranscript(existingTranscript.content);
+            setLanguage(existingTranscript.language || "en-US");
+            // Set session start time to original transcript's timestamp
+            if (existingTranscript.timestamp) {
+              setSessionStartTime(new Date(existingTranscript.timestamp));
+            }
+            localStorage.removeItem("transvero-session");
+            sessionStorage.setItem("transvero-loaded", "true");
+          }
+        } catch (error) {
+          console.error("Error loading transcript to continue:", error);
+          setError("Failed to load transcript. Starting new session.");
+        }
+      };
+      loadExistingTranscript();
       return;
     }
 
@@ -207,7 +239,7 @@ const LiveSession: React.FC = () => {
         sessionStorage.setItem("transvero-loaded", "true");
       }
     }
-  }, [transcript, sessionStartTime, location.search]);
+  }, [transcript, sessionStartTime, location.search, continuingTranscriptId, user]);
 
   const handleStartRecording = async () => {
     if (!user) {
@@ -349,6 +381,8 @@ const LiveSession: React.FC = () => {
     setSessionStartTime(null);
     setError("");
     setHasUnsavedChanges(false);
+    setContinuingTranscriptId(null);
+    setOriginalTranscriptContent("");
     sessionContentRef.current = [];
 
     // Clear localStorage and sessionStorage
@@ -366,22 +400,36 @@ const LiveSession: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const title = generateTranscriptTitle();
-      const transcriptData = {
-        title,
-        content: transcript,
-        timestamp: sessionStartTime?.toISOString() || new Date().toISOString(),
-        speakers: false,
-        language,
-      };
+      if (continuingTranscriptId) {
+        // Append new content to existing transcript
+        // Only append content that was added after the original
+        if (transcript.length > originalTranscriptContent.length) {
+          const newContent = transcript.slice(originalTranscriptContent.length).trim();
+          if (newContent) {
+            await appendToTranscript(user.uid, continuingTranscriptId, newContent);
+          }
+        }
+      } else {
+        // Create new transcript
+        const title = generateTranscriptTitle();
+        const transcriptData = {
+          title,
+          content: transcript,
+          timestamp: sessionStartTime?.toISOString() || new Date().toISOString(),
+          speakers: false,
+          language,
+        };
 
-      await saveTranscript(user.uid, transcriptData);
+        await saveTranscript(user.uid, transcriptData);
+      }
 
       // Clear session
       setTranscript("");
       setInterimTranscript("");
       setSessionStartTime(null);
       setHasUnsavedChanges(false);
+      setContinuingTranscriptId(null);
+      setOriginalTranscriptContent("");
       sessionContentRef.current = [];
       localStorage.removeItem("transvero-session");
       sessionStorage.removeItem("transvero-loaded");
@@ -563,8 +611,16 @@ const LiveSession: React.FC = () => {
                   Live Session
                 </h1>
                 <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-300">
-                  Real-time speech recognition and transcription
+                  {continuingTranscriptId
+                    ? "Continuing existing transcript"
+                    : "Real-time speech recognition and transcription"}
                 </p>
+                {continuingTranscriptId && (
+                  <div className="mt-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300">
+                    <FiPlay className="h-3 w-3 mr-1" />
+                    Continuing transcript
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}

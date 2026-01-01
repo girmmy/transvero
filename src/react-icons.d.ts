@@ -34,4 +34,5 @@ declare module "react-icons/fi" {
   export const FiZoomIn: ComponentType<SVGProps<SVGSVGElement>>;
   export const FiZoomOut: ComponentType<SVGProps<SVGSVGElement>>;
   export const FiRotateCcw: ComponentType<SVGProps<SVGSVGElement>>;
+  export const FiPlay: ComponentType<SVGProps<SVGSVGElement>>;
 }

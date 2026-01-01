@@ -82,6 +82,29 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleUpdateTranscript = async (
+    transcriptId: string,
+    updates: Partial<Transcript>
+  ) => {
+    // Optimistically update UI
+    setTranscripts((prev) =>
+      prev.map((t) => (t.id === transcriptId ? { ...t, ...updates } : t))
+    );
+    setFilteredTranscripts((prev) =>
+      prev.map((t) => (t.id === transcriptId ? { ...t, ...updates } : t))
+    );
+
+    // Refetch from database to ensure consistency
+    if (user) {
+      try {
+        await loadTranscripts();
+      } catch (error) {
+        console.error("Error refetching transcripts after update:", error);
+        // If refetch fails, the optimistic update still stands
+      }
+    }
+  };
+
   const stats = [
     {
       label: "Total Transcripts",
@@ -193,6 +216,7 @@ const Dashboard: React.FC = () => {
                 key={transcript.id}
                 transcript={transcript}
                 onDelete={handleDeleteTranscript}
+                onUpdate={handleUpdateTranscript}
               />
             ))}
           </div>

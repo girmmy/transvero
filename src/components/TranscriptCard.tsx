@@ -1,34 +1,46 @@
 // Transcript Card Component
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Transcript } from "../types";
 import { exportTranscriptToPDF, formatTimestamp } from "../utils/pdfExporter";
 import { exportTranscriptToBRF } from "../utils/brfExporter";
-import { deleteTranscript } from "../services/firestoreService";
+import { deleteTranscript, updateTranscript } from "../services/firestoreService";
 import { useAuth } from "../contexts/AuthContext";
-import { FiEye, FiDownload, FiTrash2, FiClock, FiGlobe, FiChevronDown } from "react-icons/fi";
+import { FiEdit, FiDownload, FiTrash2, FiClock, FiGlobe, FiChevronDown, FiCheck, FiX, FiPlay } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
+import ConfirmDialog from "./ConfirmDialog";
 
 interface TranscriptCardProps {
   transcript: Transcript;
   onDelete: (transcriptId: string) => void;
+  onUpdate: (transcriptId: string, updates: Partial<Transcript>) => void;
 }
 
 const TranscriptCard: React.FC<TranscriptCardProps> = ({
   transcript,
   onDelete,
+  onUpdate,
 }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showFullContent, setShowFullContent] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newTitle, setNewTitle] = useState(transcript.title);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const handleDelete = async () => {
-    if (
-      !user ||
-      !window.confirm("Are you sure you want to delete this transcript?")
-    ) {
-      return;
-    }
+  useEffect(() => {
+    setNewTitle(transcript.title);
+  }, [transcript.title]);
 
+  const handleDeleteClick = () => {
+    if (!user) return;
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!user) return;
+
+    setShowDeleteDialog(false);
     setIsDeleting(true);
     try {
       await deleteTranscript(user.uid, transcript.id);
@@ -39,6 +51,38 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteDialog(false);
+  };
+
+  const handleRename = async () => {
+    if (!user || !newTitle.trim() || newTitle === transcript.title) {
+      setIsRenaming(false);
+      setNewTitle(transcript.title);
+      return;
+    }
+
+    try {
+      await updateTranscript(user.uid, transcript.id, { title: newTitle.trim() });
+      onUpdate(transcript.id, { title: newTitle.trim() });
+      setIsRenaming(false);
+    } catch (error) {
+      console.error("Error renaming transcript:", error);
+      alert("Failed to rename transcript. Please try again.");
+      setNewTitle(transcript.title);
+      setIsRenaming(false);
+    }
+  };
+
+  const handleCancelRename = () => {
+    setNewTitle(transcript.title);
+    setIsRenaming(false);
+  };
+
+  const handleContinue = () => {
+    navigate(`/live?continue=${transcript.id}`);
   };
 
   const handleExportPDF = async () => {
@@ -61,18 +105,60 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
       {/* Header */}
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
-          {transcript.title}
-        </h3>
-        <div className="flex space-x-2 ml-4 relative">
-          <button
-            onClick={() => setShowFullContent(!showFullContent)}
-            className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-            aria-label="View transcript"
-          >
-            <FiEye className="h-4 w-4" />
-          </button>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">
+        {isRenaming ? (
+          <div className="flex-1 flex items-center gap-2 min-w-0">
+            <input
+              type="text"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleRename();
+                if (e.key === "Escape") handleCancelRename();
+              }}
+              className="flex-1 min-w-0 px-2 py-1 text-lg font-semibold text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+            <button
+              onClick={handleRename}
+              className="flex-shrink-0 p-1.5 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
+              aria-label="Save rename"
+            >
+              <FiCheck className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleCancelRename}
+              className="flex-shrink-0 p-1.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+              aria-label="Cancel rename"
+            >
+              <FiX className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <h3 className="flex-1 text-lg font-semibold text-gray-900 dark:text-white line-clamp-2 min-w-0">
+            {transcript.title}
+          </h3>
+        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {!isRenaming && (
+            <>
+              <button
+                onClick={handleContinue}
+                className="p-2 text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                aria-label="Continue transcript"
+                title="Continue this transcript"
+              >
+                <FiPlay className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setIsRenaming(true)}
+                className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                aria-label="Rename transcript"
+              >
+                <FiEdit className="h-4 w-4" />
+              </button>
+            </>
+          )}
 
           {/* Export dropdown */}
           <div className="relative">
@@ -111,7 +197,7 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
           </div>
 
           <button
-            onClick={handleDelete}
+            onClick={handleDeleteClick}
             disabled={isDeleting}
             className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
             aria-label="Delete transcript"
@@ -142,15 +228,20 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
 
       {/* Content */}
       <div className="text-gray-700 dark:text-gray-300">
-        {showFullContent ? (
-          <div className="whitespace-pre-wrap max-h-96 overflow-y-auto">
-            {transcript.content}
-          </div>
-        ) : (
-          <p className="line-clamp-3">{truncateContent(transcript.content)}</p>
-        )}
+        <p className="line-clamp-3">{truncateContent(transcript.content)}</p>
       </div>
 
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        title="Delete Transcript"
+        message={`Are you sure you want to delete "${transcript.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
+        type="danger"
+      />
     </div>
   );
 };
