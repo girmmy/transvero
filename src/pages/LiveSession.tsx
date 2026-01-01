@@ -67,7 +67,6 @@ const LiveSession: React.FC = () => {
   const recognitionRef = useRef<any>(null);
   const sessionContentRef = useRef<string[]>([]);
   const audioRecorderRef = useRef<any>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     // Detect browser compatibility
@@ -319,7 +318,6 @@ const LiveSession: React.FC = () => {
       try {
         // Stop recording and get the audio blob
         const audioBlob = await audioRecorderRef.current.stopRecording();
-        const recorder = audioRecorderRef.current;
         audioRecorderRef.current = null;
 
         // Validate blob
