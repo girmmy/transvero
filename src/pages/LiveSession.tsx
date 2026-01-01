@@ -66,8 +66,8 @@ const LiveSession: React.FC = () => {
   // Refs
   const recognitionRef = useRef<any>(null);
   const sessionContentRef = useRef<string[]>([]);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const audioRecorderRef = useRef<any>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     // Detect browser compatibility
@@ -255,39 +255,30 @@ const LiveSession: React.FC = () => {
 
     if (isMultispeakerEnabled) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            sampleRate: 44100,
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
-
-        // Choose best supported mime type
-        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : "audio/webm";
-
-        const options = {
-          mimeType,
-          audioBitsPerSecond: 128000
-        };
-
-        const mediaRecorder = new MediaRecorder(stream, options);
-        mediaRecorderRef.current = mediaRecorder;
-        audioChunksRef.current = [];
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunksRef.current.push(event.data);
+        // Use the mobile-compatible AudioRecorder
+        const { AudioRecorder } = await import("../utils/audioRecorder");
+        const recorder = new AudioRecorder();
+        await recorder.startRecording();
+        audioRecorderRef.current = recorder;
+      } catch (err: any) {
+        console.error("Failed to start audio recording:", err);
+        
+        // Clean up if recorder was partially created
+        if (audioRecorderRef.current) {
+          try {
+            await audioRecorderRef.current.stopRecording();
+          } catch (e) {
+            // Ignore cleanup errors
           }
-        };
-
-        mediaRecorder.start();
-      } catch (err) {
-        console.error("Failed to start MediaRecorder:", err);
+          audioRecorderRef.current = null;
+        }
+        
+        const errorMessage = err.message || "Audio recording not supported on this device";
+        setError(
+          `Failed to start audio recording: ${errorMessage}. Please ensure microphone permissions are granted.`
+        );
+        setIsMultispeakerEnabled(false);
+        setIsRecording(false);
       }
     }
 
@@ -322,36 +313,48 @@ const LiveSession: React.FC = () => {
     recognitionRef.current?.stopRecognition();
     setIsRecording(false);
 
-    if (isMultispeakerEnabled && mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
+    if (isMultispeakerEnabled && audioRecorderRef.current) {
       setIsProcessing(true);
 
-      // Wait for the media recorder to finish saving chunks
-      mediaRecorderRef.current.onstop = async () => {
-        try {
-          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+      try {
+        // Stop recording and get the audio blob
+        const audioBlob = await audioRecorderRef.current.stopRecording();
+        const recorder = audioRecorderRef.current;
+        audioRecorderRef.current = null;
 
-          // Use the speechRecognitionAPIService directly for diarization
-          // We need to import it or ensure it's accessible
-          const { speechRecognitionAPIService } = await import("../utils/speechRecognitionAPI");
-
-          const uploadUrl = await speechRecognitionAPIService.uploadAudio(audioBlob);
-          const diarizedTranscript = await speechRecognitionAPIService.transcribeWithDiarization(
-            uploadUrl,
-            speakerCount
-          );
-
-          if (diarizedTranscript) {
-            setTranscript(diarizedTranscript);
-            sessionContentRef.current = [diarizedTranscript];
-          }
-        } catch (err: any) {
-          console.error("Diarization failed:", err);
-          setError(`Multi-speaker analysis failed: ${err.message}`);
-        } finally {
-          setIsProcessing(false);
+        // Validate blob
+        if (!audioBlob || audioBlob.size === 0) {
+          throw new Error("No audio data was recorded. Please try again.");
         }
-      };
+
+        // Use the speechRecognitionAPIService directly for diarization
+        const { speechRecognitionAPIService } = await import("../utils/speechRecognitionAPI");
+
+        // Show progress message
+        setError("Uploading audio for multi-speaker analysis...");
+
+        const uploadUrl = await speechRecognitionAPIService.uploadAudio(audioBlob);
+        
+        setError("Processing audio and identifying speakers...");
+        
+        const diarizedTranscript = await speechRecognitionAPIService.transcribeWithDiarization(
+          uploadUrl,
+          speakerCount
+        );
+
+        if (diarizedTranscript) {
+          setTranscript(diarizedTranscript);
+          sessionContentRef.current = [diarizedTranscript];
+          setError(""); // Clear any error messages
+        } else {
+          throw new Error("No transcript was generated from the audio.");
+        }
+      } catch (err: any) {
+        console.error("Diarization failed:", err);
+        setError(`Multi-speaker analysis failed: ${err.message || "Unknown error"}. Please try recording again.`);
+      } finally {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -389,9 +392,19 @@ const LiveSession: React.FC = () => {
     localStorage.removeItem("transvero-session");
     sessionStorage.removeItem("transvero-loaded");
 
-    // Stop any ongoing recording
+    // Stop any ongoing recording and clean up audio recorder
     if (isRecording) {
       handleStopRecording();
+    } else if (audioRecorderRef.current) {
+      // Clean up audio recorder if it exists but recording wasn't active
+      try {
+        audioRecorderRef.current.stopRecording().catch(() => {
+          // Ignore errors during cleanup
+        });
+      } catch (e) {
+        // Ignore errors
+      }
+      audioRecorderRef.current = null;
     }
   };
 
@@ -750,7 +763,7 @@ const LiveSession: React.FC = () => {
                     <div className="group relative flex items-center">
                       <FiInfo className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 ml-1 cursor-help" />
                       <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 w-64 max-w-xs p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 text-center pointer-events-none whitespace-normal break-words">
-                        When you end the recording, Transvero will process the audio and replace the text with speaker labels.
+                        When you end the recording, Transvero will process the audio and replace the text with speaker labels. Works on both desktop and mobile devices.
                         <div className="absolute left-1/2 top-full -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
                       </div>
                     </div>
