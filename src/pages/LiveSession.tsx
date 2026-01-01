@@ -324,16 +324,29 @@ const LiveSession: React.FC = () => {
 
         // Validate blob
         if (!audioBlob || audioBlob.size === 0) {
-          throw new Error("No audio data was recorded. Please try again.");
+          throw new Error("No audio data was recorded. Please ensure your microphone is working and try again.");
         }
+
+        // Log blob info for debugging
+        console.log("Audio blob info:", {
+          size: audioBlob.size,
+          type: audioBlob.type,
+          sizeMB: (audioBlob.size / 1024 / 1024).toFixed(2),
+        });
 
         // Use the speechRecognitionAPIService directly for diarization
         const { speechRecognitionAPIService } = await import("../utils/speechRecognitionAPI");
 
         // Show progress message
-        setError("Uploading audio for multi-speaker analysis...");
+        setError(`Uploading audio (${(audioBlob.size / 1024 / 1024).toFixed(2)}MB) for multi-speaker analysis...`);
 
-        const uploadUrl = await speechRecognitionAPIService.uploadAudio(audioBlob);
+        let uploadUrl: string;
+        try {
+          uploadUrl = await speechRecognitionAPIService.uploadAudio(audioBlob);
+        } catch (uploadError: any) {
+          console.error("Upload error details:", uploadError);
+          throw new Error(`Upload failed: ${uploadError.message}`);
+        }
         
         setError("Processing audio and identifying speakers...");
         

@@ -311,26 +311,121 @@ export class SpeechRecognitionAPIService {
 
   public async uploadAudio(audioBlob: Blob): Promise<string> {
     try {
-      // Direct upload to AssemblyAI
-      // Note: For larger files, it's better to use a proxy, but for short recordings this is fine
+      // Validate blob
+      if (!audioBlob || audioBlob.size === 0) {
+        throw new Error("Audio blob is empty or invalid");
+      }
+
+      // Check blob size (Firebase Functions has 10MB limit for callable functions)
+      // For larger files, we'll use direct upload
+      const firebaseFunctionsMaxSize = 9 * 1024 * 1024; // 9MB (slightly under 10MB limit)
+      const assemblyAIMaxSize = 200 * 1024 * 1024; // 200MB
+      
+      if (audioBlob.size > assemblyAIMaxSize) {
+        throw new Error(`Audio file is too large (${(audioBlob.size / 1024 / 1024).toFixed(2)}MB). Maximum size is 200MB.`);
+      }
+
+      const useDirectUpload = audioBlob.size > firebaseFunctionsMaxSize;
+
+      // Try Firebase Functions proxy first (more reliable, especially on mobile) if file is small enough
+      if (!useDirectUpload) {
+        try {
+          const { getFunctions, httpsCallable } = await import("firebase/functions");
+          const functions = getFunctions();
+          const uploadAudioProxy = httpsCallable(functions, "uploadAudioToAssemblyAI");
+
+          // Convert blob to base64 for Firebase Functions
+          const base64Audio = await this.blobToBase64(audioBlob);
+          const mimeType = audioBlob.type || "audio/wav";
+
+          const result = await uploadAudioProxy({
+            audioData: base64Audio,
+            mimeType: mimeType,
+          });
+
+          const data = result.data as { upload_url: string };
+          if (!data.upload_url) {
+            throw new Error("No upload URL returned from proxy");
+          }
+
+          return data.upload_url;
+        } catch (proxyError: any) {
+          console.warn("Firebase Functions proxy failed, trying direct upload:", proxyError);
+          // Fall through to direct upload
+        }
+      }
+
+      // Direct upload (for large files or if proxy fails)
+      if (!this.apiKey || this.apiKey.trim() === "") {
+        throw new Error(
+          "Unable to upload audio.\n\n" +
+          "Please ensure:\n" +
+          "1. Firebase Functions are deployed with uploadAudioToAssemblyAI function (for files < 10MB)\n" +
+          "2. Or set REACT_APP_ASSEMBLYAI_API_KEY in .env file\n" +
+          "3. Check your network connection"
+        );
+      }
+
       const response = await fetch("https://api.assemblyai.com/v2/upload", {
         method: "POST",
         headers: {
           authorization: this.apiKey.trim(),
+          "Content-Type": audioBlob.type || "application/octet-stream",
         },
         body: audioBlob,
       });
 
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+        const errorText = await response.text();
+        let errorMessage = `Upload failed (${response.status})`;
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage += `: ${errorData.error || errorText}`;
+        } catch {
+          errorMessage += `: ${errorText || response.statusText}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      if (!data.upload_url) {
+        throw new Error("No upload URL in response from AssemblyAI");
+      }
+
       return data.upload_url;
     } catch (error: any) {
       console.error("Error uploading audio:", error);
+      
+      // Provide more helpful error messages
+      if (error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+        throw new Error("Network error uploading audio. Please check your internet connection and try again.");
+      } else if (error.message.includes("401") || error.message.includes("Unauthorized")) {
+        throw new Error("Authentication failed. Please check your AssemblyAI API key configuration.");
+      } else if (error.message.includes("413") || error.message.includes("too large")) {
+        throw new Error(`Audio file is too large. Please record a shorter session or use a lower quality setting.`);
+      }
+      
       throw new Error(`Failed to upload audio: ${error.message}`);
     }
+  }
+
+  private blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          // Remove data URL prefix (e.g., "data:audio/wav;base64,")
+          const base64 = reader.result.split(",")[1];
+          resolve(base64);
+        } else {
+          reject(new Error("Failed to convert blob to base64"));
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 
   public async transcribeWithDiarization(
