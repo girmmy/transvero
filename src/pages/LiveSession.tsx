@@ -45,6 +45,7 @@ const LiveSession: React.FC = () => {
   const [isMultispeakerEnabled, setIsMultispeakerEnabled] = useState(false);
   const [speakerCount, setSpeakerCount] = useState(2);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState("");
 
   // Browser compatibility state
   const [browserInfo, setBrowserInfo] = useState<BrowserInfo | null>(null);
@@ -335,36 +336,59 @@ const LiveSession: React.FC = () => {
         // Use the speechRecognitionAPIService directly for diarization
         const { speechRecognitionAPIService } = await import("../utils/speechRecognitionAPI");
 
-        // Show progress message
-        setError(`Uploading audio (${(audioBlob.size / 1024 / 1024).toFixed(2)}MB) for multi-speaker analysis...`);
+        // Show progress messages in overlay (not as errors)
+        setProcessingMessage(`Uploading audio (${(audioBlob.size / 1024 / 1024).toFixed(2)}MB)...`);
 
         let uploadUrl: string;
         try {
           uploadUrl = await speechRecognitionAPIService.uploadAudio(audioBlob);
+          setProcessingMessage("Processing audio and identifying speakers...");
         } catch (uploadError: any) {
           console.error("Upload error details:", uploadError);
           throw new Error(`Upload failed: ${uploadError.message}`);
         }
         
-        setError("Processing audio and identifying speakers...");
+        // Update progress message
+        setProcessingMessage("Analyzing speakers and transcribing... This may take a moment.");
         
+        // Pass the current language to the transcription service
         const diarizedTranscript = await speechRecognitionAPIService.transcribeWithDiarization(
           uploadUrl,
-          speakerCount
+          speakerCount,
+          language // Pass the selected language for proper multi-language support
         );
 
-        if (diarizedTranscript) {
+        if (diarizedTranscript && diarizedTranscript.trim()) {
           setTranscript(diarizedTranscript);
           sessionContentRef.current = [diarizedTranscript];
           setError(""); // Clear any error messages
+          setProcessingMessage(""); // Clear processing message
         } else {
-          throw new Error("No transcript was generated from the audio.");
+          throw new Error("No transcript was generated from the audio. Please try recording again.");
         }
       } catch (err: any) {
         console.error("Diarization failed:", err);
-        setError(`Multi-speaker analysis failed: ${err.message || "Unknown error"}. Please try recording again.`);
+        
+        // Provide user-friendly error messages
+        let errorMessage = "Multi-speaker analysis failed. ";
+        
+        if (err.message.includes("timeout") || err.message.includes("timed out")) {
+          errorMessage += "The analysis is taking too long. Please try recording a shorter session.";
+        } else if (err.message.includes("network") || err.message.includes("fetch")) {
+          errorMessage += "Network error. Please check your internet connection and try again.";
+        } else if (err.message.includes("401") || err.message.includes("Unauthorized")) {
+          errorMessage += "Authentication error. Please check your API configuration.";
+        } else if (err.message.includes("Upload failed")) {
+          errorMessage += err.message;
+        } else {
+          errorMessage += err.message || "Unknown error. Please try recording again.";
+        }
+        
+        setError(errorMessage);
+        setProcessingMessage(""); // Clear processing message on error
       } finally {
         setIsProcessing(false);
+        setProcessingMessage("");
       }
     }
   };
@@ -613,8 +637,13 @@ const LiveSession: React.FC = () => {
                 Analyzing Speakers
               </h3>
               <p className="mt-2 text-gray-600 dark:text-gray-400 text-center text-sm">
-                Transvero is identifying different voices in your recording. This may take a moment...
+                {processingMessage || "Transvero is identifying different voices in your recording. This may take a moment..."}
               </p>
+              {language && language !== "en-US" && (
+                <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 text-center">
+                  Processing in {language.split("-")[0].toUpperCase()} language
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -781,23 +810,31 @@ const LiveSession: React.FC = () => {
                   </div>
 
                   {isMultispeakerEnabled && (
-                    <div className="flex items-center justify-between pt-1">
-                      <label htmlFor="speaker-count" className="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                        Expected Speakers:
-                      </label>
-                      <select
-                        id="speaker-count"
-                        value={speakerCount}
-                        onChange={(e) => setSpeakerCount(parseInt(e.target.value))}
-                        disabled={isRecording || isProcessing}
-                        className="ml-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
-                      >
-                        {[2, 3, 4, 5, 6, 7, 8].map((num) => (
-                          <option key={num} value={num}>
-                            {num}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="speaker-count" className="text-xs font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                          Expected Speakers:
+                        </label>
+                        <select
+                          id="speaker-count"
+                          value={speakerCount}
+                          onChange={(e) => setSpeakerCount(parseInt(e.target.value))}
+                          disabled={isRecording || isProcessing}
+                          className="ml-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
+                        >
+                          {[2, 3, 4, 5, 6, 7, 8].map((num) => (
+                            <option key={num} value={num}>
+                              {num}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {isProcessing && (
+                        <div className="flex items-center space-x-2 text-xs text-blue-600 dark:text-blue-400">
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 dark:border-blue-400"></div>
+                          <span>Analyzing audio...</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

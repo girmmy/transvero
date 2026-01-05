@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can only access their own transcripts
+    match /users/{userId}/transcripts/{transcriptId} {
+      // Allow read and write only if authenticated and the userId matches
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Validate data structure on write
+      allow create: if request.auth != null 
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['title', 'content', 'timestamp', 'speakers', 'language'])
+        && request.resource.data.title is string
+        && request.resource.data.content is string
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.speakers is bool
+        && request.resource.data.language is string;
+      
+      // Validate updates
+      allow update: if request.auth != null 
+        && request.auth.uid == userId
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'timestamp']));
+    }
+    
+    // Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

@@ -64,9 +64,18 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
       return;
     }
 
+    // Validate title length
+    if (newTitle.trim().length > 200) {
+      alert("Title must be 200 characters or less.");
+      setNewTitle(transcript.title);
+      setIsRenaming(false);
+      return;
+    }
+
     try {
-      await updateTranscript(user.uid, transcript.id, { title: newTitle.trim() });
-      onUpdate(transcript.id, { title: newTitle.trim() });
+      const sanitizedTitle = newTitle.trim();
+      await updateTranscript(user.uid, transcript.id, { title: sanitizedTitle });
+      onUpdate(transcript.id, { title: sanitizedTitle });
       setIsRenaming(false);
     } catch (error) {
       console.error("Error renaming transcript:", error);

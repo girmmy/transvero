@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../utils/firebase";
 import { Transcript } from "../types";
+import { sanitizeText, sanitizeTitle, sanitizeSearchTerm, isValidUserId } from "../utils/sanitize";
 
 const COLLECTION_NAME = "transcripts";
 
@@ -20,6 +21,19 @@ export const saveTranscript = async (
   userId: string,
   transcript: Omit<Transcript, "id">
 ): Promise<string> => {
+  // Validate user ID
+  if (!isValidUserId(userId)) {
+    throw new Error("Invalid user ID");
+  }
+
+  // Sanitize input
+  const sanitizedTranscript = {
+    ...transcript,
+    title: sanitizeTitle(transcript.title),
+    content: sanitizeText(transcript.content),
+    language: sanitizeText(transcript.language || "en-US"),
+  };
+
   const useDevFallback = !db && process.env.NODE_ENV === "development";
   if (useDevFallback) {
     const key = `dev_transcripts_${userId}`;
@@ -28,7 +42,7 @@ export const saveTranscript = async (
     const id = `dev-${Date.now()}`;
     const item: Transcript = {
       id,
-      ...transcript,
+      ...sanitizedTranscript,
       timestamp: new Date(transcript.timestamp).toISOString(),
     } as Transcript;
     items.unshift(item);
@@ -40,7 +54,7 @@ export const saveTranscript = async (
     const docRef = await addDoc(
       collection(db, "users", userId, COLLECTION_NAME),
       {
-        ...transcript,
+        ...sanitizedTranscript,
         timestamp: Timestamp.fromDate(new Date(transcript.timestamp)),
       }
     );
@@ -53,6 +67,11 @@ export const saveTranscript = async (
 export const getUserTranscripts = async (
   userId: string
 ): Promise<Transcript[]> => {
+  // Validate user ID
+  if (!isValidUserId(userId)) {
+    throw new Error("Invalid user ID");
+  }
+
   const useDevFallback = !db && process.env.NODE_ENV === "development";
   if (useDevFallback) {
     const key = `dev_transcripts_${userId}`;
@@ -82,6 +101,14 @@ export const getTranscriptById = async (
   userId: string,
   transcriptId: string
 ): Promise<Transcript | null> => {
+  // Validate inputs
+  if (!isValidUserId(userId)) {
+    throw new Error("Invalid user ID");
+  }
+  if (!transcriptId || typeof transcriptId !== "string" || transcriptId.length > 100) {
+    throw new Error("Invalid transcript ID");
+  }
+
   const useDevFallback = !db && process.env.NODE_ENV === "development";
   if (useDevFallback) {
     const key = `dev_transcripts_${userId}`;
@@ -113,6 +140,20 @@ export const appendToTranscript = async (
   transcriptId: string,
   newContent: string
 ): Promise<void> => {
+  // Validate inputs
+  if (!isValidUserId(userId)) {
+    throw new Error("Invalid user ID");
+  }
+  if (!transcriptId || typeof transcriptId !== "string" || transcriptId.length > 100) {
+    throw new Error("Invalid transcript ID");
+  }
+  
+  // Sanitize new content
+  const sanitizedContent = sanitizeText(newContent);
+  if (!sanitizedContent) {
+    throw new Error("Content cannot be empty");
+  }
+
   const useDevFallback = !db && process.env.NODE_ENV === "development";
   if (useDevFallback) {
     const key = `dev_transcripts_${userId}`;
@@ -120,7 +161,7 @@ export const appendToTranscript = async (
     const items: Transcript[] = raw ? JSON.parse(raw) : [];
     const updated = items.map((t) =>
       t.id === transcriptId
-        ? { ...t, content: t.content + "\n\n" + newContent }
+        ? { ...t, content: t.content + "\n\n" + sanitizedContent }
         : t
     );
     localStorage.setItem(key, JSON.stringify(updated));
@@ -137,7 +178,7 @@ export const appendToTranscript = async (
 
     const currentContent = docSnap.data().content as string;
     await updateDoc(docRef, {
-      content: currentContent + "\n\n" + newContent,
+      content: currentContent + "\n\n" + sanitizedContent,
     });
   } catch (error: any) {
     throw new Error("Failed to append to transcript. Please try again.");
@@ -149,13 +190,37 @@ export const updateTranscript = async (
   transcriptId: string,
   updates: Partial<Transcript>
 ): Promise<void> => {
+  // Validate inputs
+  if (!isValidUserId(userId)) {
+    throw new Error("Invalid user ID");
+  }
+  if (!transcriptId || typeof transcriptId !== "string" || transcriptId.length > 100) {
+    throw new Error("Invalid transcript ID");
+  }
+
+  // Sanitize updates
+  const sanitizedUpdates: Partial<Transcript> = {};
+  if (updates.title !== undefined) {
+    sanitizedUpdates.title = sanitizeTitle(updates.title);
+  }
+  if (updates.content !== undefined) {
+    sanitizedUpdates.content = sanitizeText(updates.content);
+  }
+  if (updates.language !== undefined) {
+    sanitizedUpdates.language = sanitizeText(updates.language);
+  }
+  // Don't allow updating id or timestamp
+  if (updates.id !== undefined || updates.timestamp !== undefined) {
+    throw new Error("Cannot update id or timestamp");
+  }
+
   const useDevFallback = !db && process.env.NODE_ENV === "development";
   if (useDevFallback) {
     const key = `dev_transcripts_${userId}`;
     const raw = localStorage.getItem(key);
     const items: Transcript[] = raw ? JSON.parse(raw) : [];
     const updated = items.map((t) =>
-      t.id === transcriptId ? { ...t, ...updates } : t
+      t.id === transcriptId ? { ...t, ...sanitizedUpdates } : t
     );
     localStorage.setItem(key, JSON.stringify(updated));
     return;
@@ -164,7 +229,7 @@ export const updateTranscript = async (
   try {
     await updateDoc(
       doc(db, "users", userId, COLLECTION_NAME, transcriptId),
-      updates
+      sanitizedUpdates
     );
   } catch (error: any) {
     throw new Error("Failed to update transcript. Please try again.");
@@ -175,6 +240,14 @@ export const deleteTranscript = async (
   userId: string,
   transcriptId: string
 ): Promise<void> => {
+  // Validate inputs
+  if (!isValidUserId(userId)) {
+    throw new Error("Invalid user ID");
+  }
+  if (!transcriptId || typeof transcriptId !== "string" || transcriptId.length > 100) {
+    throw new Error("Invalid transcript ID");
+  }
+
   const useDevFallback = !db && process.env.NODE_ENV === "development";
   if (useDevFallback) {
     const key = `dev_transcripts_${userId}`;
@@ -196,6 +269,17 @@ export const searchTranscripts = async (
   userId: string,
   searchTerm: string
 ): Promise<Transcript[]> => {
+  // Validate inputs
+  if (!isValidUserId(userId)) {
+    throw new Error("Invalid user ID");
+  }
+  
+  // Sanitize search term
+  const sanitizedTerm = sanitizeSearchTerm(searchTerm);
+  if (!sanitizedTerm) {
+    return [];
+  }
+
   const useDevFallback = !db && process.env.NODE_ENV === "development";
   if (useDevFallback) {
     const key = `dev_transcripts_${userId}`;
@@ -203,8 +287,8 @@ export const searchTranscripts = async (
     const items: Transcript[] = raw ? JSON.parse(raw) : [];
     return items.filter(
       (transcript) =>
-        transcript.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transcript.content.toLowerCase().includes(searchTerm.toLowerCase())
+        transcript.title.toLowerCase().includes(sanitizedTerm.toLowerCase()) ||
+        transcript.content.toLowerCase().includes(sanitizedTerm.toLowerCase())
     );
   }
 
@@ -224,8 +308,8 @@ export const searchTranscripts = async (
     // Client-side filtering since Firestore doesn't support full-text search
     return allTranscripts.filter(
       (transcript) =>
-        transcript.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        transcript.content.toLowerCase().includes(searchTerm.toLowerCase())
+        transcript.title.toLowerCase().includes(sanitizedTerm.toLowerCase()) ||
+        transcript.content.toLowerCase().includes(sanitizedTerm.toLowerCase())
     );
   } catch (error: any) {
     throw new Error("Failed to search transcripts. Please try again.");

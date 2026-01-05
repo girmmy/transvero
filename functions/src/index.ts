@@ -7,10 +7,13 @@ admin.initializeApp();
 // Proxy endpoint for AssemblyAI token generation
 // This allows the API key to stay secure on the server
 export const getAssemblyAIToken = functions.https.onCall(async (data, context) => {
-  // Optional: Add authentication check
-  // if (!context.auth) {
-  //   throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
-  // }
+  // Require authentication to prevent unauthorized usage
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be authenticated to use this service"
+    );
+  }
 
   // Use environment variable (recommended) or fall back to functions.config() for backward compatibility
   const assemblyAIKey = process.env.ASSEMBLYAI_API_KEY || functions.config().assemblyai?.key;
@@ -82,10 +85,31 @@ export const getAssemblyAIToken = functions.https.onCall(async (data, context) =
 // Proxy endpoint for AssemblyAI audio upload
 // This allows secure uploads without exposing API key to client
 export const uploadAudioToAssemblyAI = functions.https.onCall(async (data, context) => {
-  // Optional: Add authentication check
-  // if (!context.auth) {
-  //   throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
-  // }
+  // Require authentication to prevent unauthorized usage
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be authenticated to upload audio"
+    );
+  }
+  
+  // Validate input size (prevent abuse)
+  if (!data.audioData || typeof data.audioData !== "string") {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Invalid audio data provided"
+    );
+  }
+  
+  // Check size (base64 is ~33% larger than binary)
+  const estimatedSize = (data.audioData.length * 3) / 4;
+  const maxSize = 10 * 1024 * 1024; // 10MB limit for Firebase Functions
+  if (estimatedSize > maxSize) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      `Audio file too large. Maximum size is ${(maxSize / 1024 / 1024).toFixed(0)}MB`
+    );
+  }
 
   const assemblyAIKey = process.env.ASSEMBLYAI_API_KEY || functions.config().assemblyai?.key;
   

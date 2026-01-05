@@ -28,6 +28,17 @@ const notifyDevAuthListeners = (user: User | null) => {
   });
 };
 
+// Simple hash function for dev mode (NOT cryptographically secure, but better than plaintext)
+const simpleHash = (str: string): string => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString(36);
+};
+
 export const createUser = async (
   email: string,
   password: string
@@ -35,7 +46,7 @@ export const createUser = async (
   const useDevFallback = !auth && process.env.NODE_ENV === "development";
   if (useDevFallback) {
     const raw = localStorage.getItem("dev_auth_users");
-    const users: Array<{ uid: string; email: string; password: string }> = raw
+    const users: Array<{ uid: string; email: string; passwordHash: string }> = raw
       ? JSON.parse(raw)
       : [];
 
@@ -44,7 +55,9 @@ export const createUser = async (
     }
 
     const uid = `dev-${Date.now()}`;
-    users.push({ uid, email, password });
+    // Store hashed password instead of plaintext
+    const passwordHash = simpleHash(password);
+    users.push({ uid, email, passwordHash });
     localStorage.setItem("dev_auth_users", JSON.stringify(users));
     const user = { uid, email, displayName: undefined } as User;
     notifyDevAuthListeners(user);
@@ -75,7 +88,8 @@ export const signInUser = async (
   const useDevFallback = !auth && process.env.NODE_ENV === "development";
   if (useDevFallback) {
     const raw = localStorage.getItem("dev_auth_users");
-    const users: Array<{ uid: string; email: string; password: string }> = raw
+    // Support both old format (plaintext) and new format (hashed) for migration
+    const users: Array<{ uid: string; email: string; password?: string; passwordHash?: string }> = raw
       ? JSON.parse(raw)
       : [];
 
@@ -83,8 +97,22 @@ export const signInUser = async (
     if (!found) {
       throw new Error(getAuthErrorMessage("auth/user-not-found"));
     }
-    if (found.password !== password) {
+    
+    // Check password - support both old (plaintext) and new (hashed) format
+    const passwordHash = simpleHash(password);
+    const passwordMatch = found.passwordHash 
+      ? found.passwordHash === passwordHash 
+      : found.password === password; // Legacy support
+    
+    if (!passwordMatch) {
       throw new Error(getAuthErrorMessage("auth/wrong-password"));
+    }
+
+    // Migrate old plaintext passwords to hashed on successful login
+    if (found.password && !found.passwordHash) {
+      found.passwordHash = passwordHash;
+      delete found.password;
+      localStorage.setItem("dev_auth_users", JSON.stringify(users));
     }
 
     const user = { uid: found.uid, email: found.email, displayName: undefined } as User;

@@ -430,10 +430,14 @@ export class SpeechRecognitionAPIService {
 
   public async transcribeWithDiarization(
     audioUrl: string,
-    speakerCount: number = 2
+    speakerCount: number = 2,
+    language?: string
   ): Promise<string> {
     try {
       this.isProcessing = true;
+
+      // Use provided language or fall back to instance language
+      const languageCode = language ? this.mapLanguageCode(language) : this.language;
 
       // 1. Submit transcription job
       const response = await fetch("https://api.assemblyai.com/v2/transcript", {
@@ -446,7 +450,7 @@ export class SpeechRecognitionAPIService {
           audio_url: audioUrl,
           speaker_labels: true,
           speakers_expected: speakerCount,
-          language_code: this.language,
+          language_code: languageCode,
           punctuate: true,
           format_text: true,
           dual_channel: false,
@@ -454,56 +458,124 @@ export class SpeechRecognitionAPIService {
       });
 
       if (!response.ok) {
-        throw new Error(`Transcription request failed: ${response.statusText}`);
+        const errorText = await response.text();
+        let errorMessage = `Transcription request failed (${response.status})`;
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage += `: ${errorData.error || errorText}`;
+        } catch {
+          errorMessage += `: ${errorText || response.statusText}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const { id } = await response.json();
-
-      // 2. Poll for completion
-      while (true) {
-        const statusResponse = await fetch(
-          `https://api.assemblyai.com/v2/transcript/${id}`,
-          {
-            headers: {
-              authorization: this.apiKey.trim(),
-            },
-          }
-        );
-
-        const statusData = await statusResponse.json();
-
-        if (statusData.status === "completed") {
-          // 3. Format result with speaker labels
-          if (!statusData.utterances) {
-            return statusData.text;
-          }
-
-          const getSpeakerLabel = (speaker: any) => {
-            if (speaker === null || speaker === undefined) return "Unknown";
-            const num = parseInt(speaker);
-            if (isNaN(num)) return speaker.toString();
-
-            // AssemblyAI uses 0-based speaker indexing (0, 1, 2, ...)
-            // Map to alphabetical labels: 0→A, 1→B, 2→C, etc.
-            return String.fromCharCode(65 + (num % 26));
-          };
-
-          return statusData.utterances
-            .map((u: any) => `[Speaker ${getSpeakerLabel(u.speaker)}] ${u.text}`)
-            .join("\n");
-        } else if (statusData.status === "error") {
-          throw new Error(`Transcription error: ${statusData.error}`);
-        }
-
-        // Wait 3 seconds before polling again
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+      if (!id) {
+        throw new Error("No transcript ID returned from AssemblyAI");
       }
+
+      // 2. Poll for completion with better error handling
+      let pollCount = 0;
+      const maxPolls = 200; // Maximum 10 minutes (200 * 3 seconds)
+      const pollInterval = 3000; // 3 seconds
+
+      while (pollCount < maxPolls) {
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        pollCount++;
+
+        try {
+          const statusResponse = await fetch(
+            `https://api.assemblyai.com/v2/transcript/${id}`,
+            {
+              headers: {
+                authorization: this.apiKey.trim(),
+              },
+            }
+          );
+
+          if (!statusResponse.ok) {
+            // Retry on network errors
+            if (pollCount < 5) {
+              console.warn(`Status check failed, retrying... (${pollCount}/5)`);
+              continue;
+            }
+            throw new Error(`Status check failed: ${statusResponse.statusText}`);
+          }
+
+          const statusData = await statusResponse.json();
+
+          if (statusData.status === "completed") {
+            // 3. Format result with speaker labels
+            if (!statusData.utterances || statusData.utterances.length === 0) {
+              // If no utterances but we have text, return the text
+              if (statusData.text) {
+                return statusData.text;
+              }
+              throw new Error("No transcript data returned from AssemblyAI");
+            }
+
+            const getSpeakerLabel = (speaker: any) => {
+              if (speaker === null || speaker === undefined) return "Unknown";
+              const num = parseInt(speaker);
+              if (isNaN(num)) return speaker.toString();
+
+              // AssemblyAI uses 0-based speaker indexing (0, 1, 2, ...)
+              // Map to alphabetical labels: 0→A, 1→B, 2→C, etc.
+              return String.fromCharCode(65 + (num % 26));
+            };
+
+            return statusData.utterances
+              .map((u: any) => `[Speaker ${getSpeakerLabel(u.speaker)}] ${u.text}`)
+              .join("\n");
+          } else if (statusData.status === "error") {
+            const errorMsg = statusData.error || "Unknown error";
+            throw new Error(`Transcription error: ${errorMsg}`);
+          }
+          // Continue polling if status is "queued" or "processing"
+        } catch (fetchError: any) {
+          // If it's a network error, retry a few times before giving up
+          if (fetchError.message.includes("fetch") || fetchError.message.includes("network")) {
+            if (pollCount < 5) {
+              console.warn(`Network error during polling, retrying... (${pollCount}/5)`);
+              continue;
+            }
+          }
+          throw fetchError;
+        }
+      }
+
+      throw new Error("Transcription timed out. The audio file may be too long or the service is busy. Please try again.");
     } catch (error: any) {
       console.error("Error in diarized transcription:", error);
       throw error;
     } finally {
       this.isProcessing = false;
     }
+  }
+
+  private mapLanguageCode(language: string): string {
+    // Map language codes to AssemblyAI language codes
+    const languageMap: { [key: string]: string } = {
+      "en-US": "en",
+      "en-GB": "en",
+      "es-ES": "es",
+      "es-MX": "es",
+      "fr-FR": "fr",
+      "de-DE": "de",
+      "it-IT": "it",
+      "pt-BR": "pt",
+      "ja-JP": "ja",
+      "ko-KR": "ko",
+      "zh-CN": "zh",
+      "ru-RU": "ru",
+      "ar-SA": "ar",
+      "hi-IN": "hi",
+      "nl-NL": "nl",
+      "vi-VN": "vi",
+    };
+    return languageMap[language] || "en";
   }
 }
 
