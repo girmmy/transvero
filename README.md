@@ -2,18 +2,20 @@
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/a4ff1a24-cdcd-4c0f-93bc-617ec4e838f2/deploy-status)](https://app.netlify.com/projects/transvero/deploys)
 
+Link to Project: https://transvero.netlify.app/
+
 A real-time speech recognition and transcription application built with React, TypeScript, Firebase, and Web Speech API.
 
 ## Features
 
-- 🎤 **Real-time Speech Recognition** - Live transcription using Web Speech API
-- 🔐 **Secure Authentication** - Firebase Authentication with email/password
-- 💾 **Cloud Storage** - Firestore database for transcript management
-- 📄 **PDF Export** - Download transcripts as formatted PDF documents
-- 👥 **Multi-speaker Support** - Identify different speakers in conversations
-- 🌍 **Multi-language Support** - Support for various languages
-- ♿ **Accessibility Focused** - High contrast design and keyboard navigation
-- 📱 **Responsive Design** - Works on desktop, tablet, and mobile devices
+- **Real-time Speech Recognition** - Live transcription using Web Speech API
+- **Secure Authentication** - Firebase Authentication with email/password
+- **Cloud Storage** - Firestore database for transcript management
+- **PDF Export** - Download transcripts as formatted PDF documents
+- **Multi-speaker Support** - Identify different speakers in conversations
+- **Multi-language Support** - Support for various languages
+- **Accessibility Focused** - High contrast design and keyboard navigation
+- **Responsive Design** - Works on desktop, tablet, and mobile devices
 
 ## Tech Stack
 
@@ -31,7 +33,7 @@ A real-time speech recognition and transcription application built with React, T
 - Node.js (v16 or higher)
 - npm or yarn
 - Firebase project with Authentication and Firestore enabled
-- (Optional) AssemblyAI API key for speech recognition that works in all browsers
+- AssemblyAI API key for speech recognition that works in all browsers (MAKE SURE YOU PUT IT IN .env FILE!!!!!!)
 - Modern browser (any modern browser works with API, Chrome/Edge/Safari for Web Speech API fallback)
 
 ## Setup Instructions
