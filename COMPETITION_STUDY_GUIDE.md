@@ -47,11 +47,12 @@
 - **Database**: Cloud Firestore for transcript storage
 - **Why Firebase?**: Serverless, real-time, scalable, easy integration
 
-### Speech Recognition: Web Speech API
+### Speech Recognition: Hybrid System
 
-- **Browser-native speech recognition**
-- **Real-time transcription capabilities**
-- **Multi-language support**
+- **Web Speech API**: Browser-native speech recognition for real-time transcription
+- **AssemblyAI API**: Advanced multi-speaker diarization and transcription
+- **Mobile Compatibility**: Custom AudioRecorder class with Web Audio API fallback
+- **Multi-language Support**: 20+ languages with proper code mapping
 
 ### Additional Libraries
 
@@ -90,8 +91,13 @@ src/
 │   └── index.ts        # All type interfaces
 ├── utils/               # Utility functions
 │   ├── firebase.ts     # Firebase configuration
-│   ├── speechRecognition.ts # Speech API wrapper
+│   ├── speechRecognition.ts # Web Speech API wrapper
+│   ├── speechRecognitionAPI.ts # AssemblyAI API integration
+│   ├── speechRecognitionHybrid.ts # Hybrid service
+│   ├── audioRecorder.ts # Mobile-compatible audio recording
 │   ├── pdfExporter.ts  # PDF generation
+│   ├── brfExporter.ts  # BRF file generation
+│   ├── sanitize.ts     # Input sanitization
 │   └── browserDetection.ts # Browser compatibility
 └── App.tsx            # Main app component with routing
 ```
@@ -230,9 +236,11 @@ this.recognition.onresult = (event) => {
 
 **Implementation**:
 
-- Language selector component
+- Language selector component with 20+ languages
 - Dynamic language switching
 - Browser-specific language support detection
+- AssemblyAI language code mapping for multi-speaker analysis
+- Proper language propagation to transcription services
 
 ### 3. Cloud Storage & Authentication
 
@@ -252,7 +260,7 @@ export const saveTranscript = async (
 };
 ```
 
-### 4. PDF Export
+### 4. PDF & BRF Export
 
 **jsPDF Integration**:
 
@@ -266,13 +274,67 @@ export const exportTranscriptToPDF = (transcript: Transcript): void => {
 };
 ```
 
-### 5. Browser Compatibility
+**BRF Export for Accessibility**:
+
+- Generates BRF (Braille Ready Format) files
+- Enables blind users to read transcripts with braille displays
+- Follows BRF formatting standards
+
+### 5. Multi-speaker Diarization
+
+**AssemblyAI Integration**:
+
+- Records audio using MediaRecorder or Web Audio API fallback
+- Uploads audio to AssemblyAI via Firebase Functions proxy
+- Performs speaker diarization with configurable speaker count
+- Supports multi-language speaker identification
+- Real-time progress feedback during processing
+
+**Key Implementation**:
+
+```tsx
+// Mobile-compatible audio recording
+const audioBlob = await audioRecorderRef.current.stopRecording();
+
+// Upload via secure Firebase Functions proxy
+const uploadUrl = await speechRecognitionAPIService.uploadAudio(audioBlob);
+
+// Multi-language diarization
+const transcript = await speechRecognitionAPIService.transcribeWithDiarization(
+  uploadUrl,
+  speakerCount,
+  language // Supports different languages
+);
+```
+
+### 6. Mobile Compatibility
+
+**AudioRecorder Class**:
+
+- Attempts MediaRecorder first (desktop browsers)
+- Falls back to Web Audio API for mobile devices
+- Converts raw audio buffers to WAV format
+- Handles various MIME types for maximum compatibility
+- Proper cleanup of media streams and audio contexts
+
+### 7. Transcript Management
+
+**Features**:
+
+- **Rename**: Inline editing with save/cancel controls
+- **Continue**: Resume recording to existing transcripts
+- **Delete**: Confirmation dialog for safe deletion
+- **Search**: Real-time search across all transcripts
+- **Export**: PDF and BRF format support
+
+### 8. Browser Compatibility
 
 **Smart Detection**:
 
 - Detects browser type and capabilities
 - Provides fallback options for unsupported browsers
 - Manual text input as alternative
+- Mobile-specific audio recording fallbacks
 
 ---
 
@@ -307,22 +369,55 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId}/transcripts/{transcriptId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Validates data structure on write
+      allow create: if request.resource.data.keys().hasAll(['title', 'content', 'timestamp', 'language']);
     }
   }
 }
 ```
 
+### Firebase Functions
+
+**API Proxy Functions**:
+
+- `getAssemblyAIToken`: Securely generates AssemblyAI tokens (requires authentication)
+- `uploadAudioToAssemblyAI`: Proxies audio uploads to AssemblyAI (requires authentication)
+- Prevents API key exposure in client-side code
+- Input validation and size limits (10MB for audio uploads)
+- Error handling and retry logic
+
 ---
 
-## 🎙️ Web Speech API
+## 🎙️ Speech Recognition Architecture
+
+### Hybrid System Design
+
+**Primary: Web Speech API**
+- Browser-native speech recognition
+- Real-time transcription with interim results
+- No external API calls required
+- Works offline (after initial load)
+
+**Advanced: AssemblyAI API**
+- Multi-speaker diarization
+- Higher accuracy transcription
+- Works across all browsers
+- Multi-language support with proper code mapping
+- Secure proxy via Firebase Functions
 
 ### Browser Support
 
+**Web Speech API**:
 - ✅ **Chrome**: Full support
 - ✅ **Edge**: Full support
 - ✅ **Safari**: Full support
 - ❌ **Firefox**: Limited support
 - ⚠️ **Brave**: May need privacy settings adjustment
+
+**AssemblyAI (Multi-speaker)**:
+- ✅ **All Modern Browsers**: Works everywhere
+- ✅ **Mobile Devices**: Full support with Web Audio API fallback
+- ✅ **iOS Safari**: Compatible via AudioRecorder class
 
 ### Key Features Implemented
 
@@ -331,12 +426,18 @@ service cloud.firestore {
 3. **Language Selection**: Supports 20+ languages
 4. **Error Handling**: Comprehensive error messages
 5. **Confidence Scoring**: Filters low-confidence results
+6. **Multi-speaker Diarization**: Identifies different speakers
+7. **Mobile Compatibility**: Web Audio API fallback for mobile devices
+8. **Progress Feedback**: Real-time status updates during processing
 
 ### Privacy & Security
 
 - Requires HTTPS (except localhost)
 - Microphone permission required
-- No data sent to external servers (browser-native)
+- API keys secured via Firebase Functions
+- User authentication required for API access
+- Input sanitization prevents XSS attacks
+- Firestore security rules enforce data isolation
 
 ---
 
@@ -356,15 +457,23 @@ service cloud.firestore {
 2. **Multi-modal Input**: Both speech and manual text input
 3. **Smart Browser Detection**: Automatically adapts to user's browser
 4. **Session Persistence**: Auto-saves to prevent data loss
-5. **PDF Generation**: Professional transcript formatting
+5. **PDF & BRF Generation**: Professional transcript formatting for sighted and blind users
+6. **Multi-speaker Diarization**: Advanced speaker identification using AssemblyAI
+7. **Mobile-First Audio Recording**: Custom AudioRecorder with Web Audio API fallback
+8. **Continue Transcripts**: Resume recording to existing transcripts
+9. **Secure API Proxy**: Firebase Functions protect API keys
+10. **Input Sanitization**: XSS protection with DOMPurify
 
 ### User Experience
 
 1. **Intuitive Interface**: Clean, modern design
 2. **Progressive Disclosure**: Features revealed as needed
-3. **Feedback Systems**: Visual indicators for recording state
-4. **Data Management**: Easy search, delete, and export
+3. **Feedback Systems**: Visual indicators for recording state and processing progress
+4. **Data Management**: Easy search, rename, delete, continue, and export
 5. **Cross-platform**: Works on desktop, tablet, and mobile
+6. **Accessibility**: BRF export for blind users, keyboard navigation, screen reader support
+7. **Error Recovery**: Graceful error handling with user-friendly messages
+8. **Progress Indicators**: Real-time feedback during multi-speaker processing
 
 ### Scalability
 
@@ -420,13 +529,38 @@ service cloud.firestore {
 
 ### 5. Security
 
-**Problem**: User data privacy concerns
+**Problem**: User data privacy concerns, API key exposure, XSS attacks
 **Solution**:
 
-- Firebase security rules
+- Firebase security rules with data validation
 - User-specific data isolation
 - HTTPS requirement
-- No external API calls for speech
+- Firebase Functions proxy for API keys
+- Input sanitization with DOMPurify
+- Authentication required for all API functions
+- Security headers (CSP, X-Frame-Options, etc.)
+
+### 6. Mobile Multi-speaker Support
+
+**Problem**: MediaRecorder API has limited support on mobile devices, especially iOS Safari
+**Solution**:
+
+- Custom AudioRecorder class
+- MediaRecorder with multiple MIME type attempts
+- Web Audio API fallback using ScriptProcessorNode
+- Raw audio buffer to WAV conversion
+- Proper cleanup of media streams and audio contexts
+- Mobile compatibility warnings in UI
+
+### 7. Multi-language Multi-speaker
+
+**Problem**: AssemblyAI requires specific language codes, UI uses different format
+**Solution**:
+
+- Language code mapping function (`mapLanguageCode`)
+- Converts UI language codes (e.g., "en-US") to AssemblyAI format (e.g., "en")
+- Passes language to diarization function
+- Supports 20+ languages for multi-speaker analysis
 
 ---
 
@@ -434,10 +568,14 @@ service cloud.firestore {
 
 ### Short-term (Next 3 months)
 
-- [ ] OpenAI Whisper API integration for better accuracy
+- [x] Multi-speaker diarization with AssemblyAI
+- [x] Mobile compatibility improvements
+- [x] Continue transcript functionality
+- [x] Rename transcript feature
+- [x] Security improvements (input sanitization, Firestore rules)
 - [ ] Real-time translation capabilities
 - [ ] Custom vocabulary support
-- [ ] Advanced speaker identification
+- [ ] Advanced speaker identification improvements
 
 ### Medium-term (3-6 months)
 
@@ -475,8 +613,16 @@ service cloud.firestore {
 3. **"How do you handle browser compatibility?"**
    - Progressive enhancement
    - Feature detection
-   - Fallback options
+   - Fallback options (Web Audio API for mobile)
    - User education
+   - Custom AudioRecorder class for mobile devices
+
+4. **"How does multi-speaker diarization work?"**
+   - Records audio using MediaRecorder or Web Audio API
+   - Uploads to AssemblyAI via secure Firebase Functions proxy
+   - AssemblyAI performs speaker identification and transcription
+   - Returns formatted transcript with speaker labels
+   - Supports multiple languages
 
 ### Design Questions
 
@@ -492,6 +638,16 @@ service cloud.firestore {
    - Graceful degradation
    - User guidance
    - Fallback mechanisms
+   - Progress indicators during long operations
+   - Retry logic for API calls
+
+3. **"How do you ensure security?"**
+   - Firebase Functions proxy for API keys
+   - Authentication required for all API access
+   - Input sanitization with DOMPurify
+   - Firestore security rules with data validation
+   - Security headers (CSP, X-Frame-Options, etc.)
+   - User-specific data isolation
 
 ### Business Questions
 
@@ -539,17 +695,22 @@ service cloud.firestore {
 
 ### Demo Preparation
 
-1. **Practice the flow**: Sign up → Record → Save → Export
+1. **Practice the flow**: Sign up → Record → Save → Continue → Rename → Export
 2. **Prepare fallbacks**: Have manual input demo ready
 3. **Show error handling**: Demonstrate browser compatibility
-4. **Highlight accessibility**: Show keyboard navigation
+4. **Highlight accessibility**: Show keyboard navigation and BRF export
+5. **Multi-speaker demo**: Record a conversation with multiple speakers
+6. **Mobile demo**: Show mobile compatibility with multi-speaker feature
+7. **Security demo**: Explain Firebase Functions proxy and authentication
 
 ### Technical Deep Dives
 
 1. **Know your code**: Be ready to explain any component
-2. **Understand trade-offs**: Why React over Vue, Firebase over AWS
-3. **Security awareness**: Explain authentication and data protection
+2. **Understand trade-offs**: Why React over Vue, Firebase over AWS, AssemblyAI for multi-speaker
+3. **Security awareness**: Explain authentication, API key protection, input sanitization
 4. **Scalability planning**: How would you handle 1M users?
+5. **Mobile compatibility**: Explain AudioRecorder class and Web Audio API fallback
+6. **Architecture decisions**: Why hybrid speech recognition system?
 
 ### Business Acumen
 
