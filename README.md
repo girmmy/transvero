@@ -2,7 +2,7 @@
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/a4ff1a24-cdcd-4c0f-93bc-617ec4e838f2/deploy-status)](https://app.netlify.com/projects/transvero/deploys)
 
-<video src="https://drive.google.com/file/d/1yQw4rPutfS50EWcZqorIp8yrbf4pNW_w/view?usp=drive_link" width="320" height="240" controls></video>
+ACCESS DEMO VIDEO HERE: [Transvero Demo](https://youtu.be/caveRoDXJts)
 
 Link to Project: https://transvero.netlify.app/
 
