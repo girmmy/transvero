@@ -3,6 +3,7 @@
 ## 📋 Table of Contents
 
 1. [Project Overview](#project-overview)
+   - [Theme Alignment: Removing Barriers for Vision and Hearing Disabilities](#theme-alignment-removing-barriers-for-vision-and-hearing-disabilities)
 2. [Tech Stack Deep Dive](#tech-stack-deep-dive)
 3. [Architecture & File Structure](#architecture--file-structure)
 4. [React Concepts Explained](#react-concepts-explained)
@@ -24,6 +25,10 @@
 - **Accessibility**: Makes spoken content accessible to deaf/hard-of-hearing users
 - **Productivity**: Helps professionals capture meeting notes and lectures
 - **Communication**: Bridges language barriers with multi-language support
+
+### Theme Alignment: Removing Barriers for Vision and Hearing Disabilities
+
+Transvero directly addresses the competition theme by removing communication barriers for people with vision and hearing disabilities. For hearing disabilities, the application provides real-time speech-to-text transcription with live captions, enabling deaf and hard-of-hearing users to access spoken content in conversations, lectures, and meetings. For vision disabilities, Transvero offers BRF (Braille) export functionality, high contrast design with adjustable text sizes, full keyboard navigation, and screen reader compatibility, ensuring users with visual impairments can independently access and interact with transcribed content.
 
 ---
 

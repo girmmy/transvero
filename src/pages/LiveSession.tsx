@@ -254,6 +254,11 @@ const LiveSession: React.FC = () => {
     }
 
     if (isMultispeakerEnabled) {
+      // Clear UI for multi-speaker recording
+      setInterimTranscript("");
+      setTranscript("");
+      sessionContentRef.current = [];
+
       try {
         // Use the mobile-compatible AudioRecorder
         const { AudioRecorder } = await import("../utils/audioRecorder");
@@ -284,6 +289,12 @@ const LiveSession: React.FC = () => {
 
     recognitionRef.current?.startRecognition(
       (transcriptText: string, isFinal: boolean) => {
+        // Skip real-time updates when multi-speaker mode is enabled
+        // The diarized transcript will replace everything when recording stops
+        if (isMultispeakerEnabled) {
+          return;
+        }
+
         if (isFinal) {
           const timestamp = new Date().toLocaleTimeString();
           const formattedText = `[${timestamp}] ${transcriptText}`;
@@ -911,6 +922,7 @@ const LiveSession: React.FC = () => {
               transcript + (interimTranscript ? "\n" + interimTranscript : "")
             }
             isRecording={isRecording}
+            isMultispeakerEnabled={isMultispeakerEnabled}
           />
 
           {/* Session Info */}

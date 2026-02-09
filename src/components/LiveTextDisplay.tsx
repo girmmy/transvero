@@ -5,11 +5,13 @@ import { FiClock } from "react-icons/fi";
 interface LiveTextDisplayProps {
   transcript: string;
   isRecording: boolean;
+  isMultispeakerEnabled?: boolean;
 }
 
 const LiveTextDisplay: React.FC<LiveTextDisplayProps> = ({
   transcript,
   isRecording,
+  isMultispeakerEnabled = false,
 }) => {
   // Text size state (in pixels, default 18px)
   const [textSize, setTextSize] = useState(() => {
@@ -110,7 +112,9 @@ const LiveTextDisplay: React.FC<LiveTextDisplayProps> = ({
               <div className="text-4xl mb-4">🎤</div>
               <p className="text-lg font-medium mb-2">Ready to transcribe</p>
               <p className="text-sm">
-                {isRecording
+                {isRecording && isMultispeakerEnabled
+                  ? "Recording... Transcript with speaker labels will appear when you stop recording."
+                  : isRecording
                   ? "Start speaking to see live captions appear here..."
                   : "Click the microphone button to start recording"}
               </p>
