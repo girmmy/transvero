@@ -107,9 +107,11 @@ const LiveSession: React.FC = () => {
 
   useEffect(() => {
     // Auto-save to localStorage with timestamp
-    if (transcript) {
+    // CRITICAL: Use user-specific key to prevent data leakage between users
+    if (transcript && user) {
+      const sessionKey = `transvero-session-${user.uid}`;
       localStorage.setItem(
-        "transvero-session",
+        sessionKey,
         JSON.stringify({
           transcript,
           sessionStartTime: sessionStartTime?.toISOString(),
@@ -118,7 +120,7 @@ const LiveSession: React.FC = () => {
         })
       );
     }
-  }, [transcript, sessionStartTime, language]);
+  }, [transcript, sessionStartTime, language, user]);
 
   useEffect(() => {
     // Track unsaved changes
@@ -170,7 +172,10 @@ const LiveSession: React.FC = () => {
 
     // If explicitly starting new, clear any saved session
     if (startNew) {
-      localStorage.removeItem("transvero-session");
+      // Clear user-specific session if user is logged in
+      if (user) {
+        localStorage.removeItem(`transvero-session-${user.uid}`);
+      }
       sessionStorage.removeItem("transvero-loaded");
       setContinuingTranscriptId(null);
       setOriginalTranscriptContent("");
@@ -181,8 +186,12 @@ const LiveSession: React.FC = () => {
     if (continueId && user && !continuingTranscriptId) {
       const loadExistingTranscript = async () => {
         try {
+          // SECURITY: Validate that the transcript belongs to the current user
           const existingTranscript = await getTranscriptById(user.uid, continueId);
           if (existingTranscript) {
+            // Additional security check: verify the transcript was actually returned
+            // If Firestore rules are working correctly, this should always pass
+            // but we add it as a defensive measure
             setContinuingTranscriptId(continueId);
             setOriginalTranscriptContent(existingTranscript.content);
             setTranscript(existingTranscript.content);
@@ -191,12 +200,16 @@ const LiveSession: React.FC = () => {
             if (existingTranscript.timestamp) {
               setSessionStartTime(new Date(existingTranscript.timestamp));
             }
-            localStorage.removeItem("transvero-session");
+            // Clear user-specific session when loading a saved transcript
+            localStorage.removeItem(`transvero-session-${user.uid}`);
             sessionStorage.setItem("transvero-loaded", "true");
+          } else {
+            // Transcript not found or user doesn't have access
+            throw new Error("Transcript not found or access denied");
           }
         } catch (error) {
           console.error("Error loading transcript to continue:", error);
-          setError("Failed to load transcript. Starting new session.");
+          setError("Failed to load transcript. You may not have access to this transcript.");
         }
       };
       loadExistingTranscript();
@@ -205,38 +218,50 @@ const LiveSession: React.FC = () => {
 
     // Load previous session from localStorage only on first load
     // Only restore if session is recent (within 1 hour) to prevent old sessions from reappearing
-    const savedSession = localStorage.getItem("transvero-session");
-    const hasLoadedBefore = sessionStorage.getItem("transvero-loaded");
+    // SECURITY: Use user-specific session key to prevent data leakage
+    if (user) {
+      const sessionKey = `transvero-session-${user.uid}`;
+      const savedSession = localStorage.getItem(sessionKey);
+      const hasLoadedBefore = sessionStorage.getItem("transvero-loaded");
 
-    if (savedSession && !transcript && !sessionStartTime && !hasLoadedBefore) {
-      try {
-        const session = JSON.parse(savedSession);
+      if (savedSession && !transcript && !sessionStartTime && !hasLoadedBefore) {
+        try {
+          const session = JSON.parse(savedSession);
 
-        // Check if session is recent (within 1 hour)
-        const SESSION_MAX_AGE = 60 * 60 * 1000; // 1 hour in milliseconds
-        const now = new Date().getTime();
-        const savedAt = session.savedAt ? new Date(session.savedAt).getTime() : 0;
-        const isRecent = savedAt && (now - savedAt) < SESSION_MAX_AGE;
+          // Check if session is recent (within 1 hour)
+          const SESSION_MAX_AGE = 60 * 60 * 1000; // 1 hour in milliseconds
+          const now = new Date().getTime();
+          const savedAt = session.savedAt ? new Date(session.savedAt).getTime() : 0;
+          const isRecent = savedAt && (now - savedAt) < SESSION_MAX_AGE;
 
-        // Only restore if session is recent or if savedAt is not present (for backward compatibility with old sessions)
-        // If session is old, clear it to prevent it from reappearing
-        if (isRecent || !session.savedAt) {
-          setTranscript(session.transcript || "");
-          setLanguage(session.language || "en-US");
-          if (session.sessionStartTime) {
-            setSessionStartTime(new Date(session.sessionStartTime));
+          // Only restore if session is recent or if savedAt is not present (for backward compatibility with old sessions)
+          // If session is old, clear it to prevent it from reappearing
+          if (isRecent || !session.savedAt) {
+            setTranscript(session.transcript || "");
+            setLanguage(session.language || "en-US");
+            if (session.sessionStartTime) {
+              setSessionStartTime(new Date(session.sessionStartTime));
+            }
+            sessionStorage.setItem("transvero-loaded", "true");
+          } else {
+            // Session is too old, clear it
+            localStorage.removeItem(sessionKey);
+            sessionStorage.setItem("transvero-loaded", "true");
           }
-          sessionStorage.setItem("transvero-loaded", "true");
-        } else {
-          // Session is too old, clear it
-          localStorage.removeItem("transvero-session");
+        } catch (error) {
+          console.error("Error loading saved session:", error);
+          // If there's an error parsing, clear the corrupted session
+          localStorage.removeItem(sessionKey);
           sessionStorage.setItem("transvero-loaded", "true");
         }
-      } catch (error) {
-        console.error("Error loading saved session:", error);
-        // If there's an error parsing, clear the corrupted session
-        localStorage.removeItem("transvero-session");
-        sessionStorage.setItem("transvero-loaded", "true");
+      }
+
+      // SECURITY CLEANUP: Remove any old global session keys to prevent data leakage
+      // This is for migration from the old global key to user-specific keys
+      const oldGlobalKey = "transvero-session";
+      if (localStorage.getItem(oldGlobalKey)) {
+        console.warn("Removing legacy global session key for security");
+        localStorage.removeItem(oldGlobalKey);
       }
     }
   }, [transcript, sessionStartTime, location.search, continuingTranscriptId, user]);

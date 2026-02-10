@@ -31,6 +31,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const unsubscribe = onAuthChange((user) => {
       setUser(user);
       setLoading(false);
+
+      // SECURITY: Clean up legacy global session key when user state changes
+      // This prevents data leakage between users on the same browser
+      const oldGlobalKey = "transvero-session";
+      if (localStorage.getItem(oldGlobalKey)) {
+        console.warn("Removing legacy global session key for security");
+        localStorage.removeItem(oldGlobalKey);
+      }
     });
 
     return unsubscribe;
@@ -61,6 +69,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signOut = async (): Promise<void> => {
     setLoading(true);
     try {
+      // SECURITY: Clear user-specific session data before logout
+      if (user) {
+        const sessionKey = `transvero-session-${user.uid}`;
+        localStorage.removeItem(sessionKey);
+        sessionStorage.removeItem("transvero-loaded");
+      }
+
       const { logoutUser } = await import("../services/authService");
       await logoutUser();
     } finally {
