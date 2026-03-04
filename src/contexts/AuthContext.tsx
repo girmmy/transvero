@@ -36,7 +36,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // This prevents data leakage between users on the same browser
       const oldGlobalKey = "transvero-session";
       if (localStorage.getItem(oldGlobalKey)) {
-        console.warn("Removing legacy global session key for security");
         localStorage.removeItem(oldGlobalKey);
       }
     });

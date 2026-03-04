@@ -64,7 +64,7 @@ export const isValidEmail = (email: string): boolean => {
  */
 export const isValidUserId = (userId: string): boolean => {
   if (!userId || typeof userId !== "string") return false;
-  // Firebase UIDs are alphanumeric and typically 28 characters
-  return /^[a-zA-Z0-9]{20,}$/.test(userId);
+  // Firebase UIDs are 28 alphanumeric chars in production; dev fallback uses dev-{timestamp}
+  return /^[a-zA-Z0-9_-]{6,128}$/.test(userId);
 };
 

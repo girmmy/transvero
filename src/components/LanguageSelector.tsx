@@ -48,7 +48,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
           onChange={(e) => onLanguageChange(e.target.value)}
           disabled={disabled}
           className={`
-            appearance-none bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 pr-10
+            appearance-none w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2.5 pr-10
             text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
             ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
           `}

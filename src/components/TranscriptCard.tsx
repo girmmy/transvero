@@ -217,7 +217,7 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
       </div>
 
       {/* Metadata */}
-      <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mb-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 dark:text-gray-400 mb-3">
         <div className="flex items-center space-x-1">
           <FiClock className="h-4 w-4" />
           <span>{formatTimestamp(transcript.timestamp)}</span>

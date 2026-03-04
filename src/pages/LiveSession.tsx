@@ -228,8 +228,8 @@ const LiveSession: React.FC = () => {
         try {
           const session = JSON.parse(savedSession);
 
-          // Check if session is recent (within 1 hour)
-          const SESSION_MAX_AGE = 60 * 60 * 1000; // 1 hour in milliseconds
+          // Check if session is recent (within 15 minutes)
+          const SESSION_MAX_AGE = 15 * 60 * 1000; // 15 minutes in milliseconds
           const now = new Date().getTime();
           const savedAt = session.savedAt ? new Date(session.savedAt).getTime() : 0;
           const isRecent = savedAt && (now - savedAt) < SESSION_MAX_AGE;
@@ -260,7 +260,6 @@ const LiveSession: React.FC = () => {
       // This is for migration from the old global key to user-specific keys
       const oldGlobalKey = "transvero-session";
       if (localStorage.getItem(oldGlobalKey)) {
-        console.warn("Removing legacy global session key for security");
         localStorage.removeItem(oldGlobalKey);
       }
     }
@@ -460,7 +459,9 @@ const LiveSession: React.FC = () => {
     sessionContentRef.current = [];
 
     // Clear localStorage and sessionStorage
-    localStorage.removeItem("transvero-session");
+    if (user) {
+      localStorage.removeItem(`transvero-session-${user.uid}`);
+    }
     sessionStorage.removeItem("transvero-loaded");
 
     // Stop any ongoing recording and clean up audio recorder
@@ -515,7 +516,7 @@ const LiveSession: React.FC = () => {
       setContinuingTranscriptId(null);
       setOriginalTranscriptContent("");
       sessionContentRef.current = [];
-      localStorage.removeItem("transvero-session");
+      localStorage.removeItem(`transvero-session-${user.uid}`);
       sessionStorage.removeItem("transvero-loaded");
 
       navigate("/dashboard");
@@ -667,7 +668,7 @@ const LiveSession: React.FC = () => {
         {/* Processing Overlay */}
         {isProcessing && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4">
+            <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 md:p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4">
               <LoadingSpinner size="lg" text="" />
               <h3 className="mt-4 text-xl font-bold text-gray-900 dark:text-white text-center">
                 Analyzing Speakers
@@ -838,7 +839,7 @@ const LiveSession: React.FC = () => {
                     </label>
                     <div className="group relative flex items-center">
                       <FiInfo className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 ml-1 cursor-help" />
-                      <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 w-64 max-w-xs p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 text-center pointer-events-none whitespace-normal break-words">
+                      <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 w-48 sm:w-64 max-w-xs p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 text-center pointer-events-none whitespace-normal break-words">
                         When you end the recording, Transvero will process the audio and replace the text with speaker labels. Works on both desktop and mobile devices.
                         <div className="absolute left-1/2 top-full -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
                       </div>

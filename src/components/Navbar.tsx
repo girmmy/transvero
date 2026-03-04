@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { FiLogOut, FiUser, FiMenu, FiX } from "react-icons/fi";
+import ConfirmDialog from "./ConfirmDialog";
 
 // Sun and Moon SVG Icons
 const SunIcon = ({ className }: { className?: string }) => (
@@ -37,15 +38,25 @@ const Navbar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
-  const handleSignOut = async () => {
+  const handleSignOutClick = () => {
+    setIsMobileMenuOpen(false);
+    setShowSignOutConfirm(true);
+  };
+
+  const handleSignOutConfirm = async () => {
+    setShowSignOutConfirm(false);
     try {
       await signOut();
       navigate("/");
-      setIsMobileMenuOpen(false);
     } catch (error) {
       console.error("Error signing out:", error);
     }
+  };
+
+  const handleSignOutCancel = () => {
+    setShowSignOutConfirm(false);
   };
 
   const toggleMobileMenu = () => {
@@ -53,6 +64,17 @@ const Navbar: React.FC = () => {
   };
 
   return (
+    <>
+    <ConfirmDialog
+      isOpen={showSignOutConfirm}
+      title="Sign Out"
+      message="Are you sure you want to sign out?"
+      confirmText="Sign Out"
+      cancelText="Cancel"
+      onConfirm={handleSignOutConfirm}
+      onCancel={handleSignOutCancel}
+      type="warning"
+    />
     <nav className="bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
@@ -112,7 +134,7 @@ const Navbar: React.FC = () => {
                     <span className="hidden lg:inline">{user.email}</span>
                   </div>
                   <button
-                    onClick={handleSignOut}
+                    onClick={handleSignOutClick}
                     className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-2 rounded-md transition-colors"
                     aria-label="Sign out"
                   >
@@ -200,7 +222,7 @@ const Navbar: React.FC = () => {
                       <span className="truncate">{user.email}</span>
                     </div>
                     <button
-                      onClick={handleSignOut}
+                      onClick={handleSignOutClick}
                       className="block w-full text-left px-3 py-2 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-md text-base font-medium transition-colors"
                     >
                       Sign Out
@@ -230,6 +252,7 @@ const Navbar: React.FC = () => {
         )}
       </div>
     </nav>
+    </>
   );
 };
 
