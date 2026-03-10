@@ -237,7 +237,7 @@ const TranscriptCard: React.FC<TranscriptCardProps> = ({
 
       {/* Content */}
       <div className="text-gray-700 dark:text-gray-300">
-        <p className="line-clamp-3">{truncateContent(transcript.content)}</p>
+        <p className="line-clamp-3 whitespace-pre-line">{truncateContent(transcript.content)}</p>
       </div>
 
       {/* Delete Confirmation Dialog */}

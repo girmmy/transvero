@@ -501,7 +501,7 @@ const LiveSession: React.FC = () => {
           title,
           content: transcript,
           timestamp: sessionStartTime?.toISOString() || new Date().toISOString(),
-          speakers: false,
+          speakers: isMultispeakerEnabled,
           language,
         };
 

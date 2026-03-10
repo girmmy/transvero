@@ -36,15 +36,32 @@ const LiveTextDisplay: React.FC<LiveTextDisplayProps> = ({
   const formatTranscript = (text: string) => {
     if (!text) return "";
 
-    return text.split("\n").map((line, index) => (
-      <p
-        key={index}
-        className="mb-2 text-gray-800 dark:text-gray-200 leading-relaxed"
-        style={{ fontSize: `${textSize}px` }}
-      >
-        {line}
-      </p>
-    ));
+    return text.split("\n").map((line, index) => {
+      const speakerMatch = line.match(/^(\[Speaker [^\]]+\])\s*/);
+      if (speakerMatch) {
+        const label = speakerMatch[1];
+        const content = line.slice(speakerMatch[0].length);
+        return (
+          <p
+            key={index}
+            className="mb-3 leading-relaxed"
+            style={{ fontSize: `${textSize}px` }}
+          >
+            <span className="font-bold text-blue-600 dark:text-blue-400 mr-2">{label}</span>
+            <span className="text-gray-800 dark:text-gray-200">{content}</span>
+          </p>
+        );
+      }
+      return (
+        <p
+          key={index}
+          className="mb-2 text-gray-800 dark:text-gray-200 leading-relaxed"
+          style={{ fontSize: `${textSize}px` }}
+        >
+          {line}
+        </p>
+      );
+    });
   };
 
   const handleIncreaseSize = () => {
