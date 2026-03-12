@@ -82,6 +82,140 @@ export const getAssemblyAIToken = functions.https.onCall(async (data, context) =
   }
 });
 
+// Proxy endpoint to submit a transcription job with speaker diarization
+export const submitTranscriptionJob = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be authenticated to use this service"
+    );
+  }
+
+  const assemblyAIKey = process.env.ASSEMBLYAI_API_KEY || functions.config().assemblyai?.key;
+  if (!assemblyAIKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "AssemblyAI API key not configured on server"
+    );
+  }
+
+  const { audioUrl, speakerCount, language } = data;
+  if (!audioUrl) {
+    throw new functions.https.HttpsError("invalid-argument", "audioUrl is required");
+  }
+
+  const requestBody = JSON.stringify({
+    audio_url: audioUrl,
+    speaker_labels: true,
+    speakers_expected: speakerCount || 2,
+    language_code: language || "en",
+    punctuate: true,
+    format_text: true,
+  });
+
+  try {
+    const result = await new Promise<any>((resolve, reject) => {
+      const req = https.request(
+        {
+          hostname: "api.assemblyai.com",
+          path: "/v2/transcript",
+          method: "POST",
+          headers: {
+            Authorization: assemblyAIKey,
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(requestBody),
+          },
+        },
+        (res) => {
+          let body = "";
+          res.on("data", (chunk) => { body += chunk; });
+          res.on("end", () => {
+            if (res.statusCode !== 200) {
+              reject(new Error(`Transcription request failed: ${res.statusCode} - ${body}`));
+              return;
+            }
+            try { resolve(JSON.parse(body)); }
+            catch { reject(new Error("Invalid JSON response from AssemblyAI")); }
+          });
+        }
+      );
+      req.on("error", reject);
+      req.write(requestBody);
+      req.end();
+    });
+
+    if (!result.id) {
+      throw new Error("No transcript ID returned from AssemblyAI");
+    }
+    return { id: result.id };
+  } catch (error: any) {
+    console.error("Error submitting transcription job:", error);
+    throw new functions.https.HttpsError("internal", error.message || "Failed to submit transcription job");
+  }
+});
+
+// Proxy endpoint to check transcription job status
+export const getTranscriptionStatus = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be authenticated to use this service"
+    );
+  }
+
+  const assemblyAIKey = process.env.ASSEMBLYAI_API_KEY || functions.config().assemblyai?.key;
+  if (!assemblyAIKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "AssemblyAI API key not configured on server"
+    );
+  }
+
+  const { transcriptId } = data;
+  if (!transcriptId) {
+    throw new functions.https.HttpsError("invalid-argument", "transcriptId is required");
+  }
+
+  try {
+    const result = await new Promise<any>((resolve, reject) => {
+      const req = https.request(
+        {
+          hostname: "api.assemblyai.com",
+          path: `/v2/transcript/${transcriptId}`,
+          method: "GET",
+          headers: {
+            Authorization: assemblyAIKey,
+          },
+        },
+        (res) => {
+          let body = "";
+          res.on("data", (chunk) => { body += chunk; });
+          res.on("end", () => {
+            if (res.statusCode !== 200) {
+              reject(new Error(`Status check failed: ${res.statusCode} - ${body}`));
+              return;
+            }
+            try { resolve(JSON.parse(body)); }
+            catch { reject(new Error("Invalid JSON response from AssemblyAI")); }
+          });
+        }
+      );
+      req.on("error", reject);
+      req.end();
+    });
+
+    return {
+      status: result.status,
+      text: result.text || null,
+      utterances: result.utterances || null,
+      error: result.error || null,
+    };
+  } catch (error: any) {
+    console.error("Error checking transcription status:", error);
+    throw new functions.https.HttpsError("internal", error.message || "Failed to check transcription status");
+  }
+});
+
 // Proxy endpoint for AssemblyAI audio upload
 // This allows secure uploads without exposing API key to client
 export const uploadAudioToAssemblyAI = functions.https.onCall(async (data, context) => {

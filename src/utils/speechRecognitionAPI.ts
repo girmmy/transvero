@@ -428,6 +428,25 @@ export class SpeechRecognitionAPIService {
     });
   }
 
+  private formatDiarizedResult(statusData: any): string {
+    if (!statusData.utterances || statusData.utterances.length === 0) {
+      if (statusData.text) return statusData.text;
+      throw new Error("No transcript data returned from AssemblyAI");
+    }
+
+    const getSpeakerLabel = (speaker: any): string => {
+      if (speaker === null || speaker === undefined) return "Unknown";
+      // AssemblyAI returns speaker as a letter (A, B, C...) or number (0, 1, 2...)
+      const num = parseInt(speaker);
+      if (isNaN(num)) return speaker.toString(); // Already a letter like "A"
+      return String.fromCharCode(65 + (num % 26)); // Map 0→A, 1→B, etc.
+    };
+
+    return statusData.utterances
+      .map((u: any) => `[Speaker ${getSpeakerLabel(u.speaker)}] ${u.text}`)
+      .join("\n");
+  }
+
   public async transcribeWithDiarization(
     audioUrl: string,
     speakerCount: number = 2,
@@ -436,14 +455,33 @@ export class SpeechRecognitionAPIService {
     try {
       this.isProcessing = true;
 
-      // Use provided language or fall back to instance language
       const languageCode = language ? this.mapLanguageCode(language) : this.language;
 
-      // 1. Submit transcription job
+      // Resolve the API key: try Firestore config first, then env var
+      let resolvedKey = this.apiKey?.trim() || "";
+      if (!resolvedKey) {
+        try {
+          const { getFirestore, doc, getDoc } = await import("firebase/firestore");
+          const db = getFirestore();
+          const snap = await getDoc(doc(db, "config", "keys"));
+          if (snap.exists()) {
+            resolvedKey = snap.data()?.assemblyai_api_key || "";
+          }
+        } catch (fsError) {
+          console.warn("Could not read API key from Firestore:", fsError);
+        }
+      }
+
+      if (!resolvedKey) {
+        throw new Error(
+          "AssemblyAI API key not configured. Please add it to Firestore at config/keys.assemblyai_api_key."
+        );
+      }
+
       const response = await fetch("https://api.assemblyai.com/v2/transcript", {
         method: "POST",
         headers: {
-          authorization: this.apiKey.trim(),
+          authorization: resolvedKey,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -453,33 +491,28 @@ export class SpeechRecognitionAPIService {
           language_code: languageCode,
           punctuate: true,
           format_text: true,
-          dual_channel: false,
         }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         let errorMessage = `Transcription request failed (${response.status})`;
-        
         try {
           const errorData = JSON.parse(errorText);
           errorMessage += `: ${errorData.error || errorText}`;
         } catch {
           errorMessage += `: ${errorText || response.statusText}`;
         }
-        
         throw new Error(errorMessage);
       }
 
       const { id } = await response.json();
-      if (!id) {
-        throw new Error("No transcript ID returned from AssemblyAI");
-      }
+      if (!id) throw new Error("No transcript ID returned from AssemblyAI");
 
-      // 2. Poll for completion with better error handling
+      // Poll directly
       let pollCount = 0;
-      const maxPolls = 200; // Maximum 10 minutes (200 * 3 seconds)
-      const pollInterval = 3000; // 3 seconds
+      const maxPolls = 200;
+      const pollInterval = 3000;
 
       while (pollCount < maxPolls) {
         await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -488,59 +521,24 @@ export class SpeechRecognitionAPIService {
         try {
           const statusResponse = await fetch(
             `https://api.assemblyai.com/v2/transcript/${id}`,
-            {
-              headers: {
-                authorization: this.apiKey.trim(),
-              },
-            }
+            { headers: { authorization: resolvedKey } }
           );
 
           if (!statusResponse.ok) {
-            // Retry on network errors
-            if (pollCount < 5) {
-              console.warn(`Status check failed, retrying... (${pollCount}/5)`);
-              continue;
-            }
+            if (pollCount < 5) continue;
             throw new Error(`Status check failed: ${statusResponse.statusText}`);
           }
 
           const statusData = await statusResponse.json();
 
           if (statusData.status === "completed") {
-            // 3. Format result with speaker labels
-            if (!statusData.utterances || statusData.utterances.length === 0) {
-              // If no utterances but we have text, return the text
-              if (statusData.text) {
-                return statusData.text;
-              }
-              throw new Error("No transcript data returned from AssemblyAI");
-            }
-
-            const getSpeakerLabel = (speaker: any) => {
-              if (speaker === null || speaker === undefined) return "Unknown";
-              const num = parseInt(speaker);
-              if (isNaN(num)) return speaker.toString();
-
-              // AssemblyAI uses 0-based speaker indexing (0, 1, 2, ...)
-              // Map to alphabetical labels: 0→A, 1→B, 2→C, etc.
-              return String.fromCharCode(65 + (num % 26));
-            };
-
-            return statusData.utterances
-              .map((u: any) => `[Speaker ${getSpeakerLabel(u.speaker)}] ${u.text}`)
-              .join("\n");
+            return this.formatDiarizedResult(statusData);
           } else if (statusData.status === "error") {
-            const errorMsg = statusData.error || "Unknown error";
-            throw new Error(`Transcription error: ${errorMsg}`);
+            throw new Error(`Transcription error: ${statusData.error || "Unknown error"}`);
           }
-          // Continue polling if status is "queued" or "processing"
         } catch (fetchError: any) {
-          // If it's a network error, retry a few times before giving up
-          if (fetchError.message.includes("fetch") || fetchError.message.includes("network")) {
-            if (pollCount < 5) {
-              console.warn(`Network error during polling, retrying... (${pollCount}/5)`);
-              continue;
-            }
+          if ((fetchError.message.includes("fetch") || fetchError.message.includes("network")) && pollCount < 5) {
+            continue;
           }
           throw fetchError;
         }
