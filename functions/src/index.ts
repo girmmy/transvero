@@ -104,10 +104,15 @@ export const submitTranscriptionJob = functions.https.onCall(async (data, contex
     throw new functions.https.HttpsError("invalid-argument", "audioUrl is required");
   }
 
+  const count = speakerCount || 2;
   const requestBody = JSON.stringify({
     audio_url: audioUrl,
+    speech_models: ["best"],
     speaker_labels: true,
-    speakers_expected: speakerCount || 2,
+    speaker_options: {
+      min_speakers_expected: count,
+      max_speakers_expected: Math.min(count + 1, 10),
+    },
     language_code: language || "en",
     punctuate: true,
     format_text: true,

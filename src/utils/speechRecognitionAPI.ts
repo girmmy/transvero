@@ -486,8 +486,12 @@ export class SpeechRecognitionAPIService {
         },
         body: JSON.stringify({
           audio_url: audioUrl,
+          speech_models: ["best"],
           speaker_labels: true,
-          speakers_expected: speakerCount,
+          speaker_options: {
+            min_speakers_expected: speakerCount,
+            max_speakers_expected: Math.min(speakerCount + 1, 10),
+          },
           language_code: languageCode,
           punctuate: true,
           format_text: true,
