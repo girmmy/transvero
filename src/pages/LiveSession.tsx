@@ -287,7 +287,7 @@ const LiveSession: React.FC = () => {
         // Use the mobile-compatible AudioRecorder
         const { AudioRecorder } = await import("../utils/audioRecorder");
         const recorder = new AudioRecorder();
-        await recorder.startRecording(true); // disable echo cancellation for diarization
+        await recorder.startRecording(true, true); // disable processing + force uncompressed WAV for diarization
         audioRecorderRef.current = recorder;
       } catch (err: any) {
         console.error("Failed to start audio recording:", err);

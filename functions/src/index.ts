@@ -109,7 +109,7 @@ export const submitTranscriptionJob = functions.https.onCall(async (data, contex
     audio_url: audioUrl,
     speaker_labels: true,
     speaker_options: {
-      min_speakers_expected: 2,
+      min_speakers_expected: 1,
       max_speakers_expected: Math.max(count, 2),
     },
     language_code: language || "en",

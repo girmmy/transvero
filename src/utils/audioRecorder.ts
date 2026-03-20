@@ -16,24 +16,30 @@ export class AudioRecorder {
   private mimeType: string = "audio/webm";
   private sampleRate: number = 44100;
 
-  async startRecording(disableProcessing: boolean = false): Promise<void> {
+  // forceWav: skip MediaRecorder and use WebAudio WAV (uncompressed).
+  // This preserves voice formants/pitch critical for speaker diarization.
+  async startRecording(disableProcessing: boolean = false, forceWav: boolean = false): Promise<void> {
     try {
-      // Get media stream with mobile-friendly constraints
-      // For multi-speaker diarization, disable echo cancellation and noise suppression
-      // so AssemblyAI receives a natural audio signal with all speakers intact.
       const constraints: MediaStreamConstraints = {
         audio: {
           echoCancellation: !disableProcessing,
           noiseSuppression: !disableProcessing,
           autoGainControl: !disableProcessing,
-          // Don't force sampleRate on mobile - let the device choose
-          // sampleRate: 44100, // Commented out for better mobile compatibility
+          sampleRate: { ideal: 48000 },
+          channelCount: { ideal: 2 },
         },
       };
 
       this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
 
-      // Try MediaRecorder first (desktop browsers)
+      // For diarization, bypass lossy codecs entirely and capture uncompressed WAV.
+      if (forceWav) {
+        this.useWebAudio = true;
+        await this.startWebAudioRecording();
+        return;
+      }
+
+      // Try MediaRecorder for normal (single-speaker) recording
       if (typeof MediaRecorder !== "undefined") {
         const mimeTypes = [
           "audio/webm;codecs=opus",
@@ -72,7 +78,6 @@ export class AudioRecorder {
           return;
         } catch (err) {
           console.warn("MediaRecorder failed, falling back to Web Audio API:", err);
-          // Fall through to Web Audio API
         }
       }
 
@@ -96,9 +101,9 @@ export class AudioRecorder {
     }
 
     try {
-      this.audioContext = new AudioContextClass({
-        sampleRate: 44100,
-      });
+      // Use device native sample rate to avoid resampling artifacts.
+      // Most modern devices run at 48000 Hz natively.
+      this.audioContext = new AudioContextClass();
 
       // Resume AudioContext if suspended (required on mobile/iOS)
       if (this.audioContext.state === "suspended") {
@@ -115,13 +120,12 @@ export class AudioRecorder {
     }
 
     // Use ScriptProcessorNode (widely supported on mobile, including iOS)
-    // Buffer size: 4096 is a good balance for mobile devices
-    // Smaller buffers (2048) work better on some devices but use more CPU
-    const bufferSize = 4096;
-    
+    // 2048 gives finer time resolution — important for fast speaker transitions
+    const bufferSize = 2048;
+
     try {
       this.scriptProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
-      
+
       this.scriptProcessor.onaudioprocess = (e) => {
         if (this.isRecording && this.audioContext && this.audioContext.state === "running") {
           try {
