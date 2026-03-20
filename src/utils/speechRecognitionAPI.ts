@@ -441,25 +441,55 @@ export class SpeechRecognitionAPIService {
       .join("\n");
   }
 
-  // Fallback: split transcript text into sentences and assign alternating speakers.
-  // Used when AssemblyAI collapses everything into 1 speaker.
-  private heuristicSplit(text: string, speakerCount: number): string {
-    // Split on sentence-ending punctuation
+  // Fallback: use word-level timestamps from AssemblyAI to detect pauses.
+  // A pause longer than PAUSE_THRESHOLD_MS between words signals a speaker change.
+  private pauseBasedSplit(words: any[], speakerCount: number): string {
+    if (words.length === 0) return "";
+
+    // Pauses longer than this (ms) indicate a speaker change.
+    // 700ms covers natural turn-taking while ignoring same-speaker breath pauses (~200-400ms).
+    const PAUSE_THRESHOLD_MS = 700;
+
+    const segments: { text: string; speakerIdx: number }[] = [];
+    let currentWords: string[] = [words[0].text];
+    let speakerIdx = 0;
+    let lastEnd: number = words[0].end;
+
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+      const pause = word.start - lastEnd;
+
+      if (pause >= PAUSE_THRESHOLD_MS) {
+        // Commit current segment and switch speaker
+        segments.push({ text: currentWords.join(" "), speakerIdx });
+        speakerIdx = (speakerIdx + 1) % speakerCount;
+        currentWords = [word.text];
+      } else {
+        currentWords.push(word.text);
+      }
+
+      lastEnd = word.end;
+    }
+
+    if (currentWords.length > 0) {
+      segments.push({ text: currentWords.join(" "), speakerIdx });
+    }
+
+    return segments
+      .map(s => `[Speaker ${String.fromCharCode(65 + s.speakerIdx)}] ${s.text}`)
+      .join("\n");
+  }
+
+  // Last-resort fallback: split on sentence boundaries when no word timing is available.
+  private sentenceSplit(text: string, speakerCount: number): string {
     const raw = text.match(/[^.!?]+[.!?]*/g) ?? [];
     const sentences = raw.map(s => s.trim()).filter(s => s.length > 1);
 
     if (sentences.length === 0) return `[Speaker A] ${text.trim()}`;
 
-    const lines: string[] = [];
-    let idx = 0;
-
-    for (const sentence of sentences) {
-      const label = String.fromCharCode(65 + (idx % speakerCount));
-      lines.push(`[Speaker ${label}] ${sentence}`);
-      idx++;
-    }
-
-    return lines.join("\n");
+    return sentences
+      .map((s, i) => `[Speaker ${String.fromCharCode(65 + (i % speakerCount))}] ${s}`)
+      .join("\n");
   }
 
   public async transcribeWithDiarization(
@@ -556,9 +586,15 @@ export class SpeechRecognitionAPIService {
               return this.formatDiarizedResult(statusData);
             }
 
-            // Diarization returned 0 or 1 speaker — fall back to sentence-level split
+            // Fallback 1: pause-based split using word timestamps
+            const words: any[] = statusData.words || [];
+            if (words.length > 0 && speakerCount > 1) {
+              return this.pauseBasedSplit(words, speakerCount);
+            }
+
+            // Fallback 2: sentence-boundary split
             if (statusData.text) {
-              return this.heuristicSplit(statusData.text, speakerCount);
+              return this.sentenceSplit(statusData.text, speakerCount);
             }
 
             throw new Error("No transcript data returned from AssemblyAI.");
