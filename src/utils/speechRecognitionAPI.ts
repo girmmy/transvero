@@ -311,52 +311,15 @@ export class SpeechRecognitionAPIService {
 
   public async uploadAudio(audioBlob: Blob): Promise<string> {
     try {
-      // Validate blob
       if (!audioBlob || audioBlob.size === 0) {
         throw new Error("Audio blob is empty or invalid");
       }
 
-      // Check blob size (Firebase Functions has 10MB limit for callable functions)
-      // For larger files, we'll use direct upload
-      const firebaseFunctionsMaxSize = 9 * 1024 * 1024; // 9MB (slightly under 10MB limit)
-      const assemblyAIMaxSize = 200 * 1024 * 1024; // 200MB
-      
-      if (audioBlob.size > assemblyAIMaxSize) {
+      if (audioBlob.size > 200 * 1024 * 1024) {
         throw new Error(`Audio file is too large (${(audioBlob.size / 1024 / 1024).toFixed(2)}MB). Maximum size is 200MB.`);
       }
 
-      const useDirectUpload = audioBlob.size > firebaseFunctionsMaxSize;
-
-      // Try Firebase Functions proxy first (more reliable, especially on mobile) if file is small enough
-      if (!useDirectUpload) {
-        try {
-          const { getFunctions, httpsCallable } = await import("firebase/functions");
-          const functions = getFunctions();
-          const uploadAudioProxy = httpsCallable(functions, "uploadAudioToAssemblyAI");
-
-          // Convert blob to base64 for Firebase Functions
-          const base64Audio = await this.blobToBase64(audioBlob);
-          const mimeType = audioBlob.type || "audio/wav";
-
-          const result = await uploadAudioProxy({
-            audioData: base64Audio,
-            mimeType: mimeType,
-          });
-
-          const data = result.data as { upload_url: string };
-          if (!data.upload_url) {
-            throw new Error("No upload URL returned from proxy");
-          }
-
-          return data.upload_url;
-        } catch (proxyError: any) {
-          console.warn("Firebase Functions proxy failed, trying direct upload:", proxyError);
-          // Fall through to direct upload
-        }
-      }
-
-      // Direct upload (for large files or if proxy fails)
-      // Resolve key: env var first, then Firestore (same as transcribeWithDiarization)
+      // Resolve API key: env var first, then Firestore
       let directKey = this.apiKey?.trim() || "";
       if (!directKey) {
         try {
@@ -367,7 +330,7 @@ export class SpeechRecognitionAPIService {
             directKey = snap.data()?.assemblyai_api_key || "";
           }
         } catch (fsError) {
-          console.warn("Could not read API key from Firestore for direct upload:", fsError);
+          console.warn("Could not read API key from Firestore:", fsError);
         }
       }
 
@@ -452,12 +415,12 @@ export class SpeechRecognitionAPIService {
 
   // Fallback: use word-level timestamps from AssemblyAI to detect pauses.
   // A pause longer than PAUSE_THRESHOLD_MS between words signals a speaker change.
-  private pauseBasedSplit(words: any[], speakerCount: number): string {
-    if (words.length === 0) return "";
+  private pauseBasedSplit(words: any[], speakerCount: number, text: string): string {
+    if (words.length === 0) return this.sentenceSplit(text, speakerCount);
 
-    // Pauses longer than this (ms) indicate a speaker change.
-    // 700ms covers natural turn-taking while ignoring same-speaker breath pauses (~200-400ms).
-    const PAUSE_THRESHOLD_MS = 700;
+    // 300ms threshold: catches fast back-and-forth while keeping same-speaker
+    // breath pauses (~100-200ms) together.
+    const PAUSE_THRESHOLD_MS = 300;
 
     const segments: { text: string; speakerIdx: number }[] = [];
     let currentWords: string[] = [words[0].text];
@@ -469,7 +432,6 @@ export class SpeechRecognitionAPIService {
       const pause = word.start - lastEnd;
 
       if (pause >= PAUSE_THRESHOLD_MS) {
-        // Commit current segment and switch speaker
         segments.push({ text: currentWords.join(" "), speakerIdx });
         speakerIdx = (speakerIdx + 1) % speakerCount;
         currentWords = [word.text];
@@ -482,6 +444,11 @@ export class SpeechRecognitionAPIService {
 
     if (currentWords.length > 0) {
       segments.push({ text: currentWords.join(" "), speakerIdx });
+    }
+
+    // If pause detection produced only 1 segment, sentence split is more useful
+    if (segments.length <= 1 && text) {
+      return this.sentenceSplit(text, speakerCount);
     }
 
     return segments
@@ -597,8 +564,8 @@ export class SpeechRecognitionAPIService {
 
             // Fallback 1: pause-based split using word timestamps
             const words: any[] = statusData.words || [];
-            if (words.length > 0 && speakerCount > 1) {
-              return this.pauseBasedSplit(words, speakerCount);
+            if (speakerCount > 1) {
+              return this.pauseBasedSplit(words, speakerCount, statusData.text || "");
             }
 
             // Fallback 2: sentence-boundary split
