@@ -16,15 +16,16 @@ export class AudioRecorder {
   private mimeType: string = "audio/webm";
   private sampleRate: number = 44100;
 
-  async startRecording(): Promise<void> {
+  async startRecording(disableProcessing: boolean = false): Promise<void> {
     try {
       // Get media stream with mobile-friendly constraints
-      // On mobile, we should be more flexible with constraints
+      // For multi-speaker diarization, disable echo cancellation and noise suppression
+      // so AssemblyAI receives a natural audio signal with all speakers intact.
       const constraints: MediaStreamConstraints = {
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: !disableProcessing,
+          noiseSuppression: !disableProcessing,
+          autoGainControl: !disableProcessing,
           // Don't force sampleRate on mobile - let the device choose
           // sampleRate: 44100, // Commented out for better mobile compatibility
         },

@@ -430,8 +430,7 @@ export class SpeechRecognitionAPIService {
 
   private formatDiarizedResult(statusData: any): string {
     if (!statusData.utterances || statusData.utterances.length === 0) {
-      if (statusData.text) return statusData.text;
-      throw new Error("No transcript data returned from AssemblyAI");
+      throw new Error("Speaker diarization did not return speaker segments. The audio may be too short, too quiet, or contain only one speaker.");
     }
 
     const getSpeakerLabel = (speaker: any): string => {
@@ -486,11 +485,10 @@ export class SpeechRecognitionAPIService {
         },
         body: JSON.stringify({
           audio_url: audioUrl,
-          speech_models: ["universal-3-pro"],
           speaker_labels: true,
           speaker_options: {
-            min_speakers_expected: speakerCount,
-            max_speakers_expected: Math.min(speakerCount + 1, 10),
+            min_speakers_expected: 2,
+            max_speakers_expected: Math.max(speakerCount, 2),
           },
           language_code: languageCode,
           punctuate: true,

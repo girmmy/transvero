@@ -107,11 +107,10 @@ export const submitTranscriptionJob = functions.https.onCall(async (data, contex
   const count = speakerCount || 2;
   const requestBody = JSON.stringify({
     audio_url: audioUrl,
-    speech_models: ["universal-3-pro"],
     speaker_labels: true,
     speaker_options: {
-      min_speakers_expected: count,
-      max_speakers_expected: Math.min(count + 1, 10),
+      min_speakers_expected: 2,
+      max_speakers_expected: Math.max(count, 2),
     },
     language_code: language || "en",
     punctuate: true,
