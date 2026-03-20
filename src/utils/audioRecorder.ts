@@ -16,30 +16,19 @@ export class AudioRecorder {
   private mimeType: string = "audio/webm";
   private sampleRate: number = 44100;
 
-  // forceWav: skip MediaRecorder and use WebAudio WAV (uncompressed).
-  // This preserves voice formants/pitch critical for speaker diarization.
-  async startRecording(disableProcessing: boolean = false, forceWav: boolean = false): Promise<void> {
+  async startRecording(): Promise<void> {
     try {
       const constraints: MediaStreamConstraints = {
         audio: {
-          echoCancellation: !disableProcessing,
-          noiseSuppression: !disableProcessing,
-          autoGainControl: !disableProcessing,
-          sampleRate: { ideal: 48000 },
-          channelCount: { ideal: 2 },
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
         },
       };
 
       this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
 
-      // For diarization, bypass lossy codecs entirely and capture uncompressed WAV.
-      if (forceWav) {
-        this.useWebAudio = true;
-        await this.startWebAudioRecording();
-        return;
-      }
-
-      // Try MediaRecorder for normal (single-speaker) recording
+      // Try MediaRecorder first (desktop browsers)
       if (typeof MediaRecorder !== "undefined") {
         const mimeTypes = [
           "audio/webm;codecs=opus",
@@ -101,9 +90,7 @@ export class AudioRecorder {
     }
 
     try {
-      // Use device native sample rate to avoid resampling artifacts.
-      // Most modern devices run at 48000 Hz natively.
-      this.audioContext = new AudioContextClass();
+      this.audioContext = new AudioContextClass({ sampleRate: 44100 });
 
       // Resume AudioContext if suspended (required on mobile/iOS)
       if (this.audioContext.state === "suspended") {
@@ -120,8 +107,7 @@ export class AudioRecorder {
     }
 
     // Use ScriptProcessorNode (widely supported on mobile, including iOS)
-    // 2048 gives finer time resolution — important for fast speaker transitions
-    const bufferSize = 2048;
+    const bufferSize = 4096;
 
     try {
       this.scriptProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
