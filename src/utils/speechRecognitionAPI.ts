@@ -356,20 +356,29 @@ export class SpeechRecognitionAPIService {
       }
 
       // Direct upload (for large files or if proxy fails)
-      if (!this.apiKey || this.apiKey.trim() === "") {
-        throw new Error(
-          "Unable to upload audio.\n\n" +
-          "Please ensure:\n" +
-          "1. Firebase Functions are deployed with uploadAudioToAssemblyAI function (for files < 10MB)\n" +
-          "2. Or set REACT_APP_ASSEMBLYAI_API_KEY in .env file\n" +
-          "3. Check your network connection"
-        );
+      // Resolve key: env var first, then Firestore (same as transcribeWithDiarization)
+      let directKey = this.apiKey?.trim() || "";
+      if (!directKey) {
+        try {
+          const { getFirestore, doc, getDoc } = await import("firebase/firestore");
+          const db = getFirestore();
+          const snap = await getDoc(doc(db, "config", "keys"));
+          if (snap.exists()) {
+            directKey = snap.data()?.assemblyai_api_key || "";
+          }
+        } catch (fsError) {
+          console.warn("Could not read API key from Firestore for direct upload:", fsError);
+        }
+      }
+
+      if (!directKey) {
+        throw new Error("AssemblyAI API key not configured. Please add it to Firestore at config/keys.assemblyai_api_key.");
       }
 
       const response = await fetch("https://api.assemblyai.com/v2/upload", {
         method: "POST",
         headers: {
-          authorization: this.apiKey.trim(),
+          authorization: directKey,
           "Content-Type": audioBlob.type || "application/octet-stream",
         },
         body: audioBlob,
