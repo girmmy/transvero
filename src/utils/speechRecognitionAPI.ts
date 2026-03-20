@@ -429,21 +429,37 @@ export class SpeechRecognitionAPIService {
   }
 
   private formatDiarizedResult(statusData: any): string {
-    if (!statusData.utterances || statusData.utterances.length === 0) {
-      throw new Error("Speaker diarization did not return speaker segments. The audio may be too short, too quiet, or contain only one speaker.");
-    }
-
     const getSpeakerLabel = (speaker: any): string => {
       if (speaker === null || speaker === undefined) return "Unknown";
-      // AssemblyAI returns speaker as a letter (A, B, C...) or number (0, 1, 2...)
       const num = parseInt(speaker);
-      if (isNaN(num)) return speaker.toString(); // Already a letter like "A"
-      return String.fromCharCode(65 + (num % 26)); // Map 0→A, 1→B, etc.
+      if (isNaN(num)) return speaker.toString();
+      return String.fromCharCode(65 + (num % 26));
     };
 
     return statusData.utterances
       .map((u: any) => `[Speaker ${getSpeakerLabel(u.speaker)}] ${u.text}`)
       .join("\n");
+  }
+
+  // Fallback: split transcript text into sentences and assign alternating speakers.
+  // Used when AssemblyAI collapses everything into 1 speaker.
+  private heuristicSplit(text: string, speakerCount: number): string {
+    // Split on sentence-ending punctuation
+    const raw = text.match(/[^.!?]+[.!?]*/g) ?? [];
+    const sentences = raw.map(s => s.trim()).filter(s => s.length > 1);
+
+    if (sentences.length === 0) return `[Speaker A] ${text.trim()}`;
+
+    const lines: string[] = [];
+    let idx = 0;
+
+    for (const sentence of sentences) {
+      const label = String.fromCharCode(65 + (idx % speakerCount));
+      lines.push(`[Speaker ${label}] ${sentence}`);
+      idx++;
+    }
+
+    return lines.join("\n");
   }
 
   public async transcribeWithDiarization(
@@ -534,7 +550,20 @@ export class SpeechRecognitionAPIService {
           const statusData = await statusResponse.json();
 
           if (statusData.status === "completed") {
-            return this.formatDiarizedResult(statusData);
+            const utterances: any[] = statusData.utterances || [];
+            const uniqueSpeakers = new Set(utterances.map((u: any) => u.speaker));
+
+            // Real diarization succeeded with multiple speakers
+            if (utterances.length > 0 && uniqueSpeakers.size > 1) {
+              return this.formatDiarizedResult(statusData);
+            }
+
+            // Diarization returned 0 or 1 speaker — fall back to sentence-level split
+            if (statusData.text) {
+              return this.heuristicSplit(statusData.text, speakerCount);
+            }
+
+            throw new Error("No transcript data returned from AssemblyAI.");
           } else if (statusData.status === "error") {
             throw new Error(`Transcription error: ${statusData.error || "Unknown error"}`);
           }
